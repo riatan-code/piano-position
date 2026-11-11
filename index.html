@@ -100,8 +100,6 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
 .key.b .lbl{color:#bbb;margin-bottom:6px;font-size:10px}
 .key.on .lbl{color:#fff}
 .key .faint{font-weight:500;opacity:.55}
-.key .mc{position:absolute;bottom:30px;font-size:9px;color:var(--muted);pointer-events:none}
-.key.on .mc{color:#fff}
 .key.hit{animation:hit .35s ease-out}
 @keyframes hit{0%{filter:brightness(1.35)}100%{filter:none}}
 
@@ -158,17 +156,17 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
 
   <div class="bar">
     <div class="bar-main">
-      <div class="bgrp keepsel">
+      <div class="bgrp">
       <span class="bar-title">読み方</span>
       <div class="seg lg" id="solSeg"><button data-v="fixed" title="鍵盤は実際に鳴る音の位置">固定ド</button><button data-v="movable" title="鍵盤は押さえる位置（トランスポーズして弾く形）">移動ド</button></div>
       </div>
-      <div class="bgrp keepsel">
+      <div class="bgrp">
       <span class="bar-title">トランスポーズ</span>
       <button class="sm pm" id="tDown" title="トランスポーズ −1（[ キー）" aria-label="トランスポーズ −1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       <select id="transpose"></select>
       <button class="sm pm" id="tUp" title="トランスポーズ +1（] キー）" aria-label="トランスポーズ +1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6 2v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
-      <div class="bgrp keepsel" title="鍵盤の位置はそのままで、鳴る音だけをオクターブ単位で上下（↑ ↓ キー）">
+      <div class="bgrp" title="鍵盤の位置はそのままで、鳴る音だけをオクターブ単位で上下（↑ ↓ キー）">
       <span class="bar-title">オクターブ</span>
       <button class="sm pm" id="oDown" title="オクターブ −1（↓ キー）" aria-label="オクターブ −1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       <output id="octVal" class="octval" aria-live="polite">0</output>
@@ -499,7 +497,7 @@ const keyEls = {};
       el.style.left = (wi * W) + '%'; el.style.width = W + '%'; wi++;
     }
     el.dataset.m = m;
-    el.innerHTML = '<span class="lbl"></span>' + (m === 60 ? '<span class="mc">中央C</span>' : '');
+    el.innerHTML = '<span class="lbl"></span>';
     el.addEventListener('pointerdown', e => { e.preventDefault(); toggleKey(m); });
     keysEl.appendChild(el); keyEls[m] = el;
   }
@@ -777,9 +775,9 @@ function drawMiniKeyboard(g, x, y, w, h, info){
       g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(info.label(m), x + i * W + W / 2, y + h - 5);
     }
     if (m % 12 === 0){   // オクターブ位置（鍵盤上の位置）
-      g.fillStyle = m === 60 ? IMG.text : IMG.muted; g.font = `${m === 60 ? 700 : 500} 10px ${FONT}`;
+      g.fillStyle = IMG.muted; g.font = `500 10px ${FONT}`;
       g.textAlign = 'center'; g.textBaseline = 'top';
-      g.fillText(m === 60 ? '中央C' : 'C' + (m / 12 - 1), x + i * W + W / 2, y + h + 4);
+      g.fillText('C' + (m / 12 - 1), x + i * W + W / 2, y + h + 4);
     }
   });
   const bw = W * 0.62, bh = h * 0.6;
@@ -858,7 +856,7 @@ function buildImageInner(how){
 // ---------- データ書き出し／読み込み（JSON） ----------
 const DATA_FORMAT = 'piano-position';
 const DATA_VERSION = 1;
-// 鍵盤位置は表記ゆれを避けるため常に ♯ 系の ASCII で書く（C4 = 中央C）
+// 鍵盤位置は表記ゆれを避けるため常に ♯ 系の ASCII で書く（C4 = MIDI 60）
 const keyName = m => { const [l, a] = SHARP[mod(m)]; return LETTERS[l] + (a ? '#' : '') + (Math.floor(m / 12) - 1); };
 function parseKey(v){
   if (typeof v === 'number' && Number.isInteger(v)) return v;          // MIDI 番号も可
@@ -1046,7 +1044,7 @@ async function copyImage(){
     toast('画像をコピーしました。チャットなどに貼り付けできます');
   } catch(e){ toast('このブラウザでは画像コピーできません。保存を使ってください'); }
 }
-let progTimer = [];
+let progTimer = [], resumeItem = null;   // resumeItem: 再生前に選択していたコード（終了・停止後に選び直す）
 function setPlaying(on){
   const b = $('playProg');
   b.classList.toggle('playing', on);
@@ -1055,11 +1053,14 @@ function setPlaying(on){
 }
 function stopProg(){
   progTimer.forEach(clearTimeout); progTimer = [];
-  setPlaying(false); renderSlots();
+  setPlaying(false);
+  const i = resumeItem ? state.prog.indexOf(resumeItem) : -1; resumeItem = null;
+  if (i >= 0) loadSlot(i); else renderSlots();   // 選び直すときは音を鳴らさない
 }
 function playProg(){
   if (progTimer.length){ stopProg(); return; }   // 再生中にもう一度押す → 停止
   if (!state.prog.length) return;
+  resumeItem = editing() ? state.prog[state.cur] : null;
   endEdit();
   const list = state.prog.slice();
   setPlaying(true);
@@ -1068,7 +1069,7 @@ function playProg(){
     state.notes = new Set(notes); state.cur = -1; render(); playAll();
     const el = $('slots').children[i]; if (el) el.style.borderColor = 'var(--accent)';
   }, i * 1300)));
-  progTimer.push(setTimeout(() => { progTimer = []; setPlaying(false); renderSlots(); }, list.length * 1300));
+  progTimer.push(setTimeout(stopProg, list.length * 1300));
 }
 
 // ---------- 共有 ----------
@@ -1253,7 +1254,8 @@ function toast(msg){
   // 編集中に鍵盤・キュー・再生などの操作ボタン以外を押したら編集を終了
   document.addEventListener('pointerdown', e => {
     if (!editing()) return;
-    if (e.target.closest('#keys, .slot, .actions, .modal, .keepsel')) return;   // 読み方・トランスポーズ・オクターブは選択を保ったまま位置／音だけ変える
+    // 何もないところを押したときだけ選択を解除。ボタン・入力欄・鍵盤・コードなど操作できるものでは解除しない
+    if (e.target.closest('button, input, select, textarea, label, a, output, [contenteditable], #keys, .slot, .modal, .toast')) return;
     endEdit(); render();
   });
 
