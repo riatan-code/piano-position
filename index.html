@@ -51,6 +51,8 @@ button.sm{padding:4px 9px}
 .bar-main{display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap}
 .bgrp{display:flex;align-items:center;gap:8px;flex:none;white-space:nowrap}
 #transpose{width:8.6em}
+#octVal{min-width:2.6em;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+#octVal.on{color:var(--accent)}
 .bar-title{font-weight:700}
 .seg.lg button{padding:7px 16px;font-size:15px}
 .bar-sub{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
@@ -157,6 +159,12 @@ select:disabled{opacity:.45}
       <button class="sm pm" id="tDown" title="トランスポーズ −1（[ キー）" aria-label="トランスポーズ −1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       <select id="transpose"></select>
       <button class="sm pm" id="tUp" title="トランスポーズ +1（] キー）" aria-label="トランスポーズ +1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6 2v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="bgrp" title="鳴る音だけをオクターブ単位で上下（鍵盤の配置・音名は変わりません）">
+      <span class="bar-title">出力オクターブ</span>
+      <button class="sm pm" id="oDown" title="出力オクターブ −1（- キー）" aria-label="出力オクターブ −1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <span id="octVal" aria-live="polite">0</span>
+      <button class="sm pm" id="oUp" title="出力オクターブ +1（= キー）" aria-label="出力オクターブ +1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6 2v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
     </div>
     <div class="bar-sub">
@@ -302,7 +310,7 @@ const INTERVALS = ['完全1度','短2度','長2度','短3度','長3度','完全4
 // notes / prog は常に「押さえる鍵盤の位置（弾く形）」で持つ。鳴る音 = 位置 + t
 // sol: 読み方 'fixed' = 固定ド / 'movable' = 移動ド（キーの主音がド）。'letter'（英語音名）はデータ書き出し用の内部表記
 // 共有は今の読み方で渡す。固定ド＝実際に鳴る音の位置（トランスポーズ 0 に直す）/ 移動ド＝同じトランスポーズで押さえる位置
-const state = { notes: new Set(), t: 0, acc: 'auto', sol: 'fixed', all: false, playOnAdd: false, prog: [], cur: -1,
+const state = { notes: new Set(), t: 0, oct: 0, acc: 'auto', sol: 'fixed', all: false, playOnAdd: false, prog: [], cur: -1,
   key: 0, minor: false, deg: true };   // deg: ディグリーは常に表示
 // 古い保存データ（true/false）も読めるように
 // 読み方は 固定ド / 移動ド の2つ（'letter' はデータ書き出し用の内部表記のみ）。古い値や CDE は固定ドとして読む
@@ -440,7 +448,7 @@ function audio(){
 function playMidi(midi, delay = 0, vel = 0.8){
   audio();
   const t0 = ctx.currentTime + delay + 0.01;
-  const f = 440 * Math.pow(2, (midi - 69) / 12);
+  const f = 440 * Math.pow(2, (midi + state.oct * 12 - 69) / 12);   // 出力オクターブは鳴る音だけに効く
   const dur = Math.min(6, Math.max(1, 3.6 * Math.sqrt(261.6 / f)));
   const g = ctx.createGain();
   const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.4;
@@ -1064,7 +1072,7 @@ function decode(str){
 function persist(){
   const code = encode();
   try { history.replaceState(null, '', code ? '#' + code : location.pathname); } catch(e) {}
-  try { localStorage.setItem('piano-pos', JSON.stringify({ code, sol: state.sol, all: state.all, playOnAdd: state.playOnAdd, title: $('imgTitle').value, cols: $('imgCols').value })); } catch(e) {}
+  try { localStorage.setItem('piano-pos', JSON.stringify({ code, sol: state.sol, oct: state.oct, all: state.all, playOnAdd: state.playOnAdd, title: $('imgTitle').value, cols: $('imgCols').value })); } catch(e) {}
 }
 async function copy(text, msg){
   try { await navigator.clipboard.writeText(text); }
@@ -1139,6 +1147,19 @@ function toast(msg){
   sel.addEventListener('change', () => { setT(+sel.value); if (state.notes.size) playAll(); });
   $('tDown').onclick = () => { setT(state.t - 1); if (state.notes.size) playAll(); };
   $('tUp').onclick   = () => { setT(state.t + 1); if (state.notes.size) playAll(); };
+  // 出力オクターブ: 鍵盤の配置・表示は変えず、鳴る音だけ上下させる
+  const OCT_MAX = 3;
+  const showOct = () => {
+    const el = $('octVal'); el.textContent = (state.oct > 0 ? '+' : '') + state.oct; el.classList.toggle('on', state.oct !== 0);
+    $('oDown').disabled = state.oct <= -OCT_MAX; $('oUp').disabled = state.oct >= OCT_MAX;
+  };
+  const setOct = o => {
+    state.oct = Math.max(-OCT_MAX, Math.min(OCT_MAX, o)); showOct();
+    try { const sv = JSON.parse(localStorage.getItem('piano-pos') || '{}'); sv.oct = state.oct; localStorage.setItem('piano-pos', JSON.stringify(sv)); } catch(e) {}
+    if (state.notes.size) playAll();
+  };
+  $('oDown').onclick = () => setOct(state.oct - 1);
+  $('oUp').onclick   = () => setOct(state.oct + 1);
 
   const keySel = $('keySel');
   [false, true].forEach(minor => {
@@ -1234,12 +1255,15 @@ function toast(msg){
     else if (k === 'ArrowDown'){ e.preventDefault(); shift(-12); }
     else if (k === '['){ $('tDown').click(); }
     else if (k === ']'){ $('tUp').click(); }
+    else if (k === '-'){ $('oDown').click(); }
+    else if (k === '=' || k === '+'){ $('oUp').click(); }
   });
 
   // 復元: URL の # が優先、なければ前回の状態
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('piano-pos') || '{}'); } catch(e) {}
   state.sol = toSolMode(saved.sol); state.all = !!saved.all; state.playOnAdd = !!saved.playOnAdd;
+  state.oct = Number.isInteger(saved.oct) ? Math.max(-OCT_MAX, Math.min(OCT_MAX, saved.oct)) : 0; showOct();
   if (!(location.hash.length > 1 && decode(location.hash)) && saved.code) decode(saved.code);
   $('imgTitle').value = saved.title || ''; $('imgCols').value = saved.cols || '0';
   $('allLabels').checked = state.all; $('playOnAdd').checked = state.playOnAdd;
