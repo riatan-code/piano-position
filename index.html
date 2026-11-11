@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piano Position</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --text:#1d1d1f; --muted:#6b6b70; --line:#dcdad5;
+  --accent:#2f6fde; --accent-soft:#dbe6fb; --root:#e2683c; --root-soft:#fbe1d6;
+  --white:#fdfdfc; --white-edge:#cfccc5; --black:#222326; --black-top:#3a3b40;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16171a; --panel:#202227; --text:#ececee; --muted:#9a9ba3; --line:#33353c;
+    --accent:#5b8ff0; --accent-soft:#25324d; --root:#f08a5d; --root-soft:#4a2c20;
+    --white:#e9e8e4; --white-edge:#9f9d97; --black:#0d0d0f; --black-top:#2b2c31;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI","Segoe UI Symbol","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.02em}
+header .hint{color:var(--muted);font-size:13px}
+
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:14px}
+.bar label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.bar .grp{display:flex;align-items:center;gap:6px}
+select,button,input[type=text]{font:inherit;color:var(--text);background:var(--bg);
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.sm{padding:4px 9px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;padding:5px 10px}
+.seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+
+.display{display:grid;grid-template-columns:1fr auto;gap:12px;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:12px;min-height:128px}
+.chord{font-size:52px;font-weight:700;line-height:1.1;letter-spacing:.01em;word-break:break-all}
+.chord.empty{color:var(--muted);font-size:22px;font-weight:500;padding-top:14px}
+.chord .csub{font-size:22px;font-weight:600;color:var(--muted);margin-left:14px;letter-spacing:0}
+.editing{display:none;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);
+  border-radius:999px;padding:2px 10px;margin-bottom:6px}
+.editing.show{display:inline-block}
+select:disabled{opacity:.45}
+.sub{color:var(--muted);font-size:14px;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 14px}
+.notes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:13px;padding:2px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chip.root{background:var(--root-soft);color:var(--root)}
+.alts{font-size:13px;color:var(--muted);margin-top:8px}
+.alts b{color:var(--text);font-weight:600;margin-right:8px}
+.actions{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:190px}
+.actions .row{display:flex;gap:6px}
+.actions .row button{flex:1}
+.kbd{font-size:11px;color:inherit;opacity:.7;margin-left:4px}
+
+.kb-scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.keys{position:relative;height:230px;min-width:820px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.key{position:absolute;top:0;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  transition:background .08s, transform .08s}
+.key.w{height:100%;background:var(--white);border:1px solid var(--white-edge);border-radius:0 0 7px 7px;z-index:1}
+.key.b{height:62%;background:linear-gradient(var(--black-top),var(--black));border-radius:0 0 5px 5px;z-index:2;
+  box-shadow:0 2px 3px rgba(0,0,0,.35)}
+.key.w:hover{background:color-mix(in srgb,var(--white) 85%,var(--accent))}
+.key.b:hover{background:linear-gradient(#4a4c55,#2a2b31)}
+.key.on.w{background:var(--accent);border-color:var(--accent)}
+.key.on.b{background:var(--accent)}
+.key.on.root.w{background:var(--root);border-color:var(--root)}
+.key.on.root.b{background:var(--root)}
+.key .lbl{font-size:11px;font-weight:700;margin-bottom:8px;text-align:center;line-height:1.15;pointer-events:none}
+.key.w .lbl{color:var(--muted)}
+.key.b .lbl{color:#bbb;margin-bottom:6px;font-size:10px}
+.key.on .lbl{color:#fff}
+.key .faint{font-weight:500;opacity:.55}
+.key .mc{position:absolute;bottom:30px;font-size:9px;color:var(--muted);pointer-events:none}
+.key.on .mc{color:#fff}
+.key.hit{animation:hit .35s ease-out}
+@keyframes hit{0%{filter:brightness(1.35)}100%{filter:none}}
+
+.prog{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.prog-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:14px}
+.prog-head .t{font-weight:650}
+.prog-head .muted{color:var(--muted);font-size:13px}
+.slots{display:flex;flex-wrap:wrap;gap:8px}
+.slot{position:relative;border:1px solid var(--line);border-radius:10px;padding:8px 26px 8px 12px;cursor:pointer;background:var(--bg);min-width:70px}
+.slot:hover{border-color:var(--accent)}
+.slot.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.slot.cur::after{content:'編集中';position:absolute;left:8px;bottom:-8px;font-size:10px;font-weight:600;line-height:1.5;
+  background:var(--accent);color:#fff;border-radius:6px;padding:0 6px}
+.slot .n{font-weight:700;font-size:16px}
+.slot .i{font-size:11px;color:var(--muted)}
+.slot .x{position:absolute;top:2px;right:4px;border:0;background:none;color:var(--muted);padding:2px 5px;font-size:14px}
+.slot .x:hover{color:var(--root)}
+.slot.drag{opacity:.4}
+.slot.over{border-color:var(--accent);border-style:dashed}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal.show{display:flex}
+.modal-box{background:var(--panel);border-radius:14px;padding:14px;max-width:min(1200px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px}
+.modal-box .imgwrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+.modal-box img{display:block;max-width:100%;height:auto}
+.modal-box .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+#dataText{width:100%;height:min(56vh,520px);font:13px/1.5 ui-monospace,Consolas,"Cascadia Mono",monospace;
+  color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical;tab-size:2}
+.empty-slot{color:var(--muted);font-size:13px}
+footer{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.8}
+footer kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-family:inherit;background:var(--panel)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:var(--text);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:14px;transition:.2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%)}
+@media (max-width:700px){
+  .display{grid-template-columns:1fr}
+  .chord{font-size:40px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Piano Position</h1>
+    <span class="hint">鍵盤をクリックで選択／解除。選んだ形のコード名を表示します。</span>
+  </header>
+
+  <div class="bar">
+    <label>移調
+      <button class="sm" id="tDown" title="移調 −1 ( [ )">−</button>
+      <select id="transpose"></select>
+      <button class="sm" id="tUp" title="移調 +1 ( ] )">＋</button>
+    </label>
+    <div class="grp"><span style="color:var(--muted)">臨時記号</span>
+      <div class="seg" id="accSeg">
+        <button data-v="auto">自動</button><button data-v="sharp">♯</button><button data-v="flat">♭</button>
+      </div>
+    </div>
+    <div class="grp"><span style="color:var(--muted)">音名</span>
+      <div class="seg" id="solSeg">
+        <button data-v="0">CDE</button><button data-v="1">ドレミ</button>
+      </div>
+    </div>
+    <div class="grp"><span style="color:var(--muted)">コード表記</span>
+      <div class="seg" id="degSeg">
+        <button data-v="0">コード名</button><button data-v="1">ディグリー</button>
+      </div>
+      <label>キー <select id="keySel" title="ディグリーの基準になるキー（実音）"></select></label>
+    </div>
+    <label><input type="checkbox" id="allLabels"> 全鍵盤に音名</label>
+    <label><input type="checkbox" id="playOnAdd"> 押すたび和音全体を鳴らす</label>
+  </div>
+
+  <div class="display">
+    <div>
+      <div id="editing" class="editing"></div>
+      <div id="chord" class="chord empty">鍵盤をクリックしてください</div>
+      <div id="sub" class="sub"></div>
+      <div id="notes" class="notes"></div>
+      <div id="alts" class="alts"></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="playAll">▶ 同時に鳴らす<span class="kbd">Space</span></button>
+      <button id="arp">♪ 分散で鳴らす<span class="kbd">Shift+Space</span></button>
+      <div class="row">
+        <button id="shiftDown" title="形ごと半音下へ (←)">◀ 半音</button>
+        <button id="shiftUp" title="形ごと半音上へ (→)">半音 ▶</button>
+      </div>
+      <div class="row">
+        <button id="clear">クリア<span class="kbd">Esc</span></button>
+        <button id="save">キューに追加<span class="kbd">Enter</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kb-scroll"><div class="keys" id="keys"></div></div>
+
+  <div class="prog">
+    <div class="prog-head">
+      <span class="t">キュー</span>
+      <span class="muted">クリックで選択すると、鍵盤の変更がそのコードに反映されます（もう一度クリックか Esc で終了）。ドラッグで並べ替え。最後に1枚の画像にまとめて出力できます。</span>
+      <span style="flex:1"></span>
+      <button class="sm" id="playProg">▶ 順に再生</button>
+      <button class="sm" id="clearProg">全削除</button>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div class="grp" style="flex-wrap:wrap;gap:8px;margin-top:10px;font-size:14px">
+      <input type="text" id="imgTitle" placeholder="画像のタイトル（任意）" style="flex:1;min-width:180px">
+      <label style="color:var(--muted)">列数
+        <select id="imgCols"><option value="0">自動</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label style="color:var(--muted)"><input type="checkbox" id="imgShape" checked> 移調時に「押さえる形」も記載</label>
+      <button class="primary" id="exportImg">🖼 画像で出力</button>
+    </div>
+  </div>
+
+  <div class="prog">
+    <div class="prog-head">
+      <span class="t">共有</span>
+      <span class="muted">データ(JSON)で全体を書き出し・読み込み。共有コードは1行の短縮版です。.json ファイルをページにドロップしても読み込めます。</span>
+    </div>
+    <div class="grp" style="flex-wrap:wrap;gap:8px">
+      <button class="sm primary" id="openData">📄 データの書き出し／読み込み</button>
+      <button class="sm" id="copyText">テキストでコピー</button>
+      <button class="sm" id="copyCode">共有コードをコピー</button>
+      <input type="text" id="codeIn" placeholder="共有コードを貼り付け" style="flex:1;min-width:200px">
+      <button class="sm" id="loadCode">読み込む</button>
+    </div>
+  </div>
+
+  <footer>
+    <kbd>Space</kbd> 同時に鳴らす　<kbd>Shift</kbd>+<kbd>Space</kbd> 分散　<kbd>←</kbd><kbd>→</kbd> 形を半音移動　<kbd>↑</kbd><kbd>↓</kbd> 形をオクターブ移動
+    <kbd>[</kbd><kbd>]</kbd> 移調　<kbd>D</kbd> コード名／ディグリー切替　<kbd>Enter</kbd> キューに追加（編集中は終了）　<kbd>Esc</kbd> クリア（編集中は終了）<br>
+    移調はピアノ自体の設定です。鍵盤の位置はそのままで、鳴る音と表示されるコード名が移調後の実音になります（「押さえている形」は移調前の名前）。<br>
+    ディグリーは選んだキー（実音）を基準にしたローマ数字です（例: キーCで Dm7 → Ⅱm7、B♭ → ♭Ⅶ、C♯dim → ♯Ⅰdim）。
+  </footer>
+</div>
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="imgwrap"><img id="previewImg" alt="出力画像のプレビュー"></div>
+    <div class="row">
+      <span style="flex:1;color:var(--muted);font-size:13px;align-self:center">プレビュー（実際の画像は2倍の解像度）</span>
+      <button id="copyImg">クリップボードにコピー</button>
+      <button class="primary" id="dlImg">PNGで保存</button>
+      <button id="closeModal">閉じる</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="dataModal">
+  <div class="modal-box" style="width:min(820px,100%)">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <b>データ（JSON）</b>
+      <span style="color:var(--muted);font-size:13px">ここで編集してから読み込むこともできます。音の指定は <code>keys</code>（鍵盤の位置。例 "C4", "F#3", "Bb2"）だけが使われ、他の項目は確認用です。</span>
+    </div>
+    <textarea id="dataText" spellcheck="false"></textarea>
+    <div id="dataMsg" style="font-size:13px;min-height:1.2em"></div>
+    <div class="row">
+      <button id="dataRefresh" title="今の状態で作り直す">現在の内容を表示</button>
+      <button id="dataCopy">コピー</button>
+      <button id="dataSave">.json で保存</button>
+      <button id="dataOpen">ファイルを開く…</button>
+      <input type="file" id="dataFile" accept=".json,.txt,application/json,text/plain" hidden>
+      <span style="flex:1"></span>
+      <button id="dataAppend" title="移調などの設定は変えず、キューの末尾に足す">キューに追加して読み込み</button>
+      <button class="primary" id="dataReplace">置き換えて読み込み</button>
+      <button id="dataClose">閉じる</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ---------- 定数 ----------
+const LOW = 36, HIGH = 84;           // C2〜C6（鍵盤上の位置）
+const LETTERS = ['C','D','E','F','G','A','B'];
+const SOLF    = ['ド','レ','ミ','ファ','ソ','ラ','シ'];
+const LETTER_PC = [0,2,4,5,7,9,11];
+const isBlack = m => [1,3,6,8,10].includes(((m%12)+12)%12);
+const mod = (a,n=12) => ((a%n)+n)%n;
+const ACC_STR = {'-2':'𝄫','-1':'♭','0':'','1':'♯','2':'𝄪'};
+// 自動表記: [letterIdx, acc]
+const AUTO_MAJ = {0:[0,0],1:[1,-1],2:[1,0],3:[2,-1],4:[2,0],5:[3,0],6:[3,1],7:[4,0],8:[5,-1],9:[5,0],10:[6,-1],11:[6,0]};
+const AUTO_MIN = {...AUTO_MAJ, 1:[0,1], 8:[4,1]};
+const SHARP = {0:[0,0],1:[0,1],2:[1,0],3:[1,1],4:[2,0],5:[3,0],6:[3,1],7:[4,0],8:[4,1],9:[5,0],10:[5,1],11:[6,0]};
+const FLAT  = {0:[0,0],1:[1,-1],2:[1,0],3:[2,-1],4:[2,0],5:[3,0],6:[4,-1],7:[4,0],8:[5,-1],9:[5,0],10:[6,-1],11:[6,0]};
+
+const DEG = {1:0,2:2,3:4,4:5,5:7,6:9,7:11,9:14,11:17,13:21};
+function parseDeg(s){
+  let acc = 0;
+  while (s.startsWith('bb')||s[0]==='b'||s[0]==='#'){ acc += s[0]==='#'?1:-1; s = s.slice(1); }
+  const n = +s;
+  return { n, semi: DEG[n] + acc, letter: (n-1)%7 };
+}
+// 単純なものほど先（優先）
+const TEMPLATES = [
+  ['', '1 3 5'], ['m', '1 b3 5'], ['5', '1 5'],
+  ['7', '1 3 5 b7'], ['m7', '1 b3 5 b7'], ['M7', '1 3 5 7'],
+  ['sus4', '1 4 5'], ['sus2', '1 2 5'], ['dim', '1 b3 b5'], ['aug', '1 3 #5'],
+  ['6', '1 3 5 6'], ['m6', '1 b3 5 6'], ['m7(♭5)', '1 b3 b5 b7'], ['dim7', '1 b3 b5 bb7'],
+  ['add9', '1 3 5 9'], ['madd9', '1 b3 5 9'], ['7sus4', '1 4 5 b7'], ['mM7', '1 b3 5 7'],
+  ['9', '1 3 5 b7 9'], ['m9', '1 b3 5 b7 9'], ['M9', '1 3 5 7 9'],
+  ['69', '1 3 5 6 9'], ['m69', '1 b3 5 6 9'],
+  ['7(♭9)', '1 3 5 b7 b9'], ['7(♯9)', '1 3 5 b7 #9'], ['7(♭5)', '1 3 b5 b7'], ['aug7', '1 3 #5 b7'],
+  ['M7(♯5)', '1 3 #5 7'], ['m7(11)', '1 b3 5 b7 11'], ['7(♯11)', '1 3 5 b7 #11'], ['M7(♯11)', '1 3 5 7 #11'],
+  ['add11', '1 3 5 11'], ['7(13)', '1 3 5 b7 13'], ['M7(13)', '1 3 5 7 13'],
+  ['11', '1 3 5 b7 9 11'], ['m11', '1 b3 5 b7 9 11'], ['13', '1 3 5 b7 9 13'], ['M13', '1 3 5 7 9 13'],
+  ['7(♭13)', '1 3 5 b7 b13'], ['7(♭9,♭13)', '1 3 5 b7 b9 b13'],
+].map(([name, s]) => {
+  const degs = s.split(' ').map(parseDeg);
+  return { name, degs, pcs: new Set(degs.map(d => mod(d.semi))), has5: s.split(' ').includes('5') };
+});
+const INTERVALS = ['完全1度','短2度','長2度','短3度','長3度','完全4度','増4度/減5度','完全5度','短6度','長6度','短7度','長7度'];
+
+// ---------- 状態 ----------
+// cur: 選択中（編集中）のキュー番号。-1 なら未選択
+// key/minor: ディグリーの基準キー（実音の主音 pc）、deg: ディグリー表記を使うか
+const state = { notes: new Set(), t: 0, acc: 'auto', sol: false, all: false, playOnAdd: false, prog: [], cur: -1,
+  key: 0, minor: false, deg: false };
+
+// ---------- ディグリー ----------
+const ROMAN = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ'];
+// 主音からの半音数 → [度数, 臨時記号]（メジャースケール基準。マイナーキーでも ♭Ⅲ/♭Ⅵ/♭Ⅶ と書く慣例）
+const DEG_PC = {0:[0,0],1:[1,-1],2:[1,0],3:[2,-1],4:[2,0],5:[3,0],6:[3,1],7:[4,0],8:[5,-1],9:[5,0],10:[6,-1],11:[6,0]};
+// ディミニッシュは経過和音として ♯ で書くのが一般的（♯Ⅰdim, ♯Ⅱdim, ♯Ⅴdim）
+const DEG_PC_DIM = {...DEG_PC, 1:[0,1], 3:[1,1], 8:[4,1]};
+function roman(pc, dim){
+  const [n, a] = (dim ? DEG_PC_DIM : DEG_PC)[mod(pc - state.key)];
+  return ACC_STR[a] + ROMAN[n];
+}
+const keyLabel = (pc = state.key, minor = state.minor) =>
+  LETTERS[(minor ? AUTO_MIN : AUTO_MAJ)[pc][0]] + ACC_STR[(minor ? AUTO_MIN : AUTO_MAJ)[pc][1]] + (minor ? 'm' : '');
+
+// ---------- 表記 ----------
+const fmt = ([l,a]) => (state.sol ? SOLF[l] : LETTERS[l]) + ACC_STR[a];
+const fmtLetter = ([l,a]) => LETTERS[l] + ACC_STR[a];   // コード名は常に英字
+function spellPc(pc, pref){
+  const tbl = pref==='sharp' ? SHARP : pref==='flat' ? FLAT : AUTO_MAJ;
+  return tbl[mod(pc)];
+}
+function octaveOf(midi, sp){ return Math.floor((midi - sp[1]) / 12) - 1; }
+
+// ---------- コード判定 ----------
+function eqSet(a,b){ if(a.size!==b.size) return false; for(const x of a) if(!b.has(x)) return false; return true; }
+
+function detect(midis){
+  if (!midis.length) return null;
+  const bass = midis[0], bassPc = mod(bass);
+  const pcs = [...new Set(midis.map(m => mod(m)))];
+  if (pcs.length < 2) return { cands: [], pcs };
+  const cands = [];
+  const run = (set, extra, outside) => {
+    for (const r of set){
+      const iv = new Set(set.map(p => mod(p - r)));
+      TEMPLATES.forEach((T, ti) => {
+        let pen = null, omit = false;
+        if (eqSet(iv, T.pcs)) pen = 0;
+        else if (T.has5 && !iv.has(7) && iv.size >= 3 && eqSet(new Set([...iv, 7]), T.pcs)) { pen = 6; omit = true; }
+        if (pen === null) return;
+        let score = ti * 0.4 + pen + extra;
+        if (r !== bassPc && !outside){
+          const b = mod(bassPc - r);
+          score += (b===3||b===4) ? 3 : (b===7 ? 4 : [6,8,9,10,11].includes(b) ? 5 : 10);
+        }
+        cands.push({ root: r, T, omit, score, bassPc, slash: r !== bassPc });
+      });
+    }
+  };
+  run(pcs, 0);
+  if (pcs.length >= 3) run(pcs.filter(p => p !== bassPc), 6, true);
+  cands.sort((a,b) => a.score - b.score);
+  const seen = new Set(), out = [];
+  for (const c of cands){
+    if (out.length && c.score > out[0].score + 7) break;
+    const s = spellChord(c); s.score = c.score;
+    if (seen.has(s.name)) continue;
+    seen.add(s.name); out.push(s);
+    if (out.length >= 5) break;
+  }
+  return { cands: out, pcs };
+}
+
+function spellChord(c){
+  const minorish = c.T.pcs.has(3) && !c.T.pcs.has(4);
+  let rootSp;
+  if (state.acc === 'sharp') rootSp = SHARP[c.root];
+  else if (state.acc === 'flat') rootSp = FLAT[c.root];
+  else rootSp = (minorish ? AUTO_MIN : AUTO_MAJ)[c.root];
+  const map = {};
+  for (const d of c.T.degs){
+    const letter = (rootSp[0] + d.letter) % 7;
+    const pc = mod(c.root + d.semi);
+    let acc = mod(pc - LETTER_PC[letter]); if (acc > 6) acc -= 12;
+    if (Math.abs(acc) > 2) continue;
+    map[pc] = [letter, acc];
+  }
+  map[c.root] = rootSp;
+  const suffix = c.T.name + (c.omit ? '(omit5)' : '');
+  let name = fmtLetter(rootSp) + suffix;
+  let deg = roman(c.root, c.T.name.startsWith('dim')) + suffix + (c.slash ? '/' + roman(c.bassPc) : '');
+  if (c.slash){
+    let bsp = map[c.bassPc];
+    if (!bsp || Math.abs(bsp[1]) === 2){
+      const flatty = rootSp[1] < 0 || Object.values(map).some(x => x[1] < 0);
+      bsp = spellPc(c.bassPc, state.acc !== 'auto' ? state.acc : (flatty ? 'flat' : 'sharp'));
+      map[c.bassPc] = bsp;
+    }
+    name += '/' + fmtLetter(bsp);
+  }
+  return { name, deg, map, root: c.root };
+}
+// 表示用: ディグリー表記ならディグリーを主、コード名を副に
+const mainName = c => state.deg ? c.deg : c.name;
+
+// ---------- オーディオ ----------
+let ctx = null, master = null, wave = null;
+function audio(){
+  if (!ctx){
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4;
+    master = ctx.createGain(); master.gain.value = 0.7;
+    master.connect(comp); comp.connect(ctx.destination);
+    const n = 24, real = new Float32Array(n), imag = new Float32Array(n);
+    for (let i = 1; i < n; i++) imag[i] = Math.pow(i, -1.7) * (i === 2 ? 1.6 : i % 2 ? 1 : 0.6);
+    wave = ctx.createPeriodicWave(real, imag);
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+function playMidi(midi, delay = 0, vel = 0.8){
+  audio();
+  const t0 = ctx.currentTime + delay + 0.01;
+  const f = 440 * Math.pow(2, (midi - 69) / 12);
+  const dur = Math.min(6, Math.max(1, 3.6 * Math.sqrt(261.6 / f)));
+  const g = ctx.createGain();
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.4;
+  filt.frequency.setValueAtTime(Math.min(f * 12, 14000), t0);
+  filt.frequency.exponentialRampToValueAtTime(Math.max(f * 2.5, 400), t0 + dur * 0.6);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vel * 0.32, t0 + 0.006);
+  g.gain.exponentialRampToValueAtTime(vel * 0.11, t0 + 0.35);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  const o1 = ctx.createOscillator(); o1.setPeriodicWave(wave); o1.frequency.value = f;
+  const o2 = ctx.createOscillator(); o2.setPeriodicWave(wave); o2.frequency.value = f * 1.0015;
+  const g2 = ctx.createGain(); g2.gain.value = 0.5;
+  o1.connect(filt); o2.connect(g2); g2.connect(filt); filt.connect(g); g.connect(master);
+  [o1, o2].forEach(o => { o.start(t0); o.stop(t0 + dur + 0.05); });
+}
+const sound = pos => pos + state.t;                  // 鍵盤位置 → 実音
+const sorted = () => [...state.notes].sort((a,b) => a-b);
+
+function flash(pos, delay = 0){
+  setTimeout(() => {
+    const el = keyEls[pos]; if (!el) return;
+    el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
+  }, delay * 1000);
+}
+function playAll(){
+  const ns = sorted(); if (!ns.length) return;
+  const v = 0.85 / Math.sqrt(ns.length) + 0.15;
+  ns.forEach(p => { playMidi(sound(p), 0, v); flash(p); });
+}
+function playArp(){
+  const ns = sorted(); if (!ns.length) return;
+  const v = 0.75;
+  ns.forEach((p, i) => { playMidi(sound(p), i * 0.13, v); flash(p, i * 0.13); });
+}
+
+// ---------- 鍵盤描画 ----------
+const keysEl = document.getElementById('keys');
+const keyEls = {};
+(function buildKeys(){
+  const whites = []; for (let m = LOW; m <= HIGH; m++) if (!isBlack(m)) whites.push(m);
+  const W = 100 / whites.length;
+  let wi = 0;
+  for (let m = LOW; m <= HIGH; m++){
+    const el = document.createElement('div');
+    el.className = 'key ' + (isBlack(m) ? 'b' : 'w');
+    if (isBlack(m)){
+      const bw = W * 0.62;
+      el.style.left = (wi * W - bw / 2) + '%'; el.style.width = bw + '%';
+    } else {
+      el.style.left = (wi * W) + '%'; el.style.width = W + '%'; wi++;
+    }
+    el.dataset.m = m;
+    el.innerHTML = '<span class="lbl"></span>' + (m === 60 ? '<span class="mc">中央C</span>' : '');
+    el.addEventListener('pointerdown', e => { e.preventDefault(); toggle(m); });
+    keysEl.appendChild(el); keyEls[m] = el;
+  }
+})();
+
+function toggle(pos){
+  if (state.notes.has(pos)){ state.notes.delete(pos); }
+  else {
+    state.notes.add(pos);
+    if (state.playOnAdd) playAll(); else { playMidi(sound(pos)); flash(pos); }
+  }
+  commitEdit();
+  render();
+}
+
+// ---------- キューの編集 ----------
+const editing = () => state.cur >= 0 && state.cur < state.prog.length;
+// 編集中なら鍵盤の内容を選択中のキューに書き戻す
+function commitEdit(){ if (editing()) state.prog[state.cur] = sorted(); }
+// 編集を終了（空になったキューは取り除く）。取り除いたら true
+function endEdit(){
+  const i = state.cur; state.cur = -1;
+  if (i >= 0 && state.prog[i] && !state.prog[i].length){ state.prog.splice(i, 1); return true; }
+  return false;
+}
+
+// ---------- 表示 ----------
+const $ = id => document.getElementById(id);
+function render(){
+  const ns = sorted();
+  const snd = ns.map(sound);
+  const res = detect(snd);
+  const best = res && res.cands[0];
+  const map = best ? best.map : {};
+  const spell = m => map[mod(m)] || spellPc(m, state.acc);
+
+  // 鍵盤
+  for (let m = LOW; m <= HIGH; m++){
+    const el = keyEls[m], on = state.notes.has(m);
+    el.classList.toggle('on', on);
+    el.classList.toggle('root', !!(on && best && mod(sound(m)) === best.root));
+    const lbl = el.firstChild;
+    if (on) lbl.textContent = fmt(spell(sound(m)));
+    else if (state.all) lbl.innerHTML = '<span class="faint">' + fmt(spellPc(sound(m), state.acc)) + '</span>';
+    else lbl.textContent = '';
+  }
+
+  // コード名
+  const chordEl = $('chord'), sub = $('sub'), notesEl = $('notes'), alts = $('alts');
+  sub.innerHTML = ''; notesEl.innerHTML = ''; alts.innerHTML = '';
+  const ed = $('editing');
+  ed.classList.toggle('show', editing());
+  ed.textContent = editing() ? `✎ キュー ${state.cur + 1} を編集中 — 鍵盤の変更がそのまま反映されます（Esc / Enter で終了）` : '';
+  $('save').firstChild.textContent = editing() ? '編集を終了' : 'キューに追加';
+  if (!ns.length){
+    chordEl.className = 'chord empty'; chordEl.textContent = '鍵盤をクリックしてください';
+  } else {
+    chordEl.className = 'chord';
+    if (best){
+      chordEl.textContent = mainName(best);
+      if (state.deg){
+        const s = document.createElement('span'); s.className = 'csub'; s.textContent = best.name;
+        chordEl.appendChild(s);
+      }
+    }
+    else if (res.pcs.length === 1){
+      const sp = spell(snd[0]);
+      chordEl.textContent = fmt(sp) + (ns.length > 1 ? '' : octaveOf(snd[0], sp));
+    } else chordEl.textContent = ns.length === 2 ? snd.map(m => fmt(spell(m))).join(' – ') : '（該当コードなし）';
+
+    const items = [];
+    if (ns.length === 2){
+      const d = snd[1] - snd[0];
+      const oct = Math.floor(d / 12);
+      items.push('音程: ' + (d === 12 ? '完全8度' : INTERVALS[d % 12] + (oct ? `（+${oct}オクターブ）` : '')));
+    }
+    if (state.t !== 0){
+      const w = detect(ns);
+      const shape = w && w.cands[0] ? w.cands[0].name
+        : (ns.length === 1 ? fmt(spellPc(ns[0], state.acc)) : ns.map(m => fmt(spellPc(m, state.acc))).join(' '));
+      items.push(`押さえている形: <b style="color:var(--text)">${shape}</b>（移調 ${state.t > 0 ? '+' : ''}${state.t}）`);
+    }
+    items.push(`${ns.length}音`);
+
+    snd.forEach(m => {
+      const sp = spell(m);
+      const c = document.createElement('span');
+      c.className = 'chip' + (best && mod(m) === best.root ? ' root' : '');
+      c.textContent = fmt(sp) + octaveOf(m, sp);
+      notesEl.appendChild(c);
+    });
+    if (state.deg && best) items.unshift(`キー ${keyLabel()}`);
+    sub.innerHTML = items.map(s => `<span>${s}</span>`).join('');
+    if (res.cands.length > 1)
+      alts.innerHTML = '別の解釈: ' + res.cands.slice(1).map(c => `<b>${mainName(c)}</b>`).join('');
+  }
+
+  renderSlots();
+  persist();
+}
+
+function slotName(notes){
+  const snd = [...notes].sort((a,b)=>a-b).map(sound);
+  const r = detect(snd);
+  if (r && r.cands[0]) return mainName(r.cands[0]);
+  if (!snd.length) return '（空）';
+  return snd.map(m => fmt(spellPc(m, state.acc))).join(' ');
+}
+// ディグリー表記時に添えるコード名
+function slotSub(notes){
+  if (!state.deg) return '';
+  const r = detect([...notes].sort((a,b)=>a-b).map(sound));
+  return r && r.cands[0] ? r.cands[0].name : '';
+}
+function renderSlots(){
+  const box = $('slots'); box.innerHTML = '';
+  if (!state.prog.length){
+    box.innerHTML = '<span class="empty-slot">まだありません。形を作って「キューに追加」(Enter)。コード進行やレッスンの手順を並べ、最後に画像で出力できます。</span>';
+    return;
+  }
+  state.prog.forEach((notes, i) => {
+    const s = document.createElement('div');
+    s.className = 'slot' + (i === state.cur ? ' cur' : '');
+    s.draggable = true;
+    s.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); s.classList.add('drag'); });
+    s.addEventListener('dragend', () => s.classList.remove('drag'));
+    s.addEventListener('dragover', e => { e.preventDefault(); s.classList.add('over'); });
+    s.addEventListener('dragleave', () => s.classList.remove('over'));
+    s.addEventListener('drop', e => {
+      e.preventDefault();
+      const from = +e.dataTransfer.getData('text/plain');
+      if (Number.isNaN(from) || from === i) return;
+      const curItem = editing() ? state.prog[state.cur] : null;   // 編集中のものは並べ替え後も選択を維持
+      const [it] = state.prog.splice(from, 1);
+      state.prog.splice(i, 0, it);
+      state.cur = curItem ? state.prog.indexOf(curItem) : -1;
+      render();
+    });
+    s.innerHTML = `<div class="n"></div><div class="i"></div><button class="x" title="削除">×</button>`;
+    s.querySelector('.n').textContent = slotName(notes);
+    const sub = slotSub(notes);
+    s.querySelector('.i').textContent = sub ? `${i + 1} · ${sub}` : String(i + 1);
+    s.title = i === state.cur ? 'もう一度クリックで編集を終了' : 'クリックで選択して編集';
+    s.addEventListener('click', e => {
+      if (e.target.classList.contains('x')){
+        state.prog.splice(i, 1);
+        if (state.cur === i) state.cur = -1; else if (state.cur > i) state.cur--;
+        render(); return;
+      }
+      if (i === state.cur){ endEdit(); render(); return; }   // 選択中をもう一度クリック → 編集終了
+      selectSlot(i); playAll();
+    });
+    box.appendChild(s);
+  });
+}
+function loadSlot(i){
+  state.notes = new Set(state.prog[i]); state.cur = i; render();
+}
+// 別のキューへ切り替え（直前の編集で空になったキューは除き、番号のずれを補正）
+function selectSlot(i){
+  const prev = state.cur;
+  if (prev !== i && endEdit() && prev < i) i--;
+  loadSlot(i);
+}
+
+// ---------- 操作 ----------
+function shift(n){
+  const ns = sorted(); if (!ns.length) return;
+  if (ns[0] + n < LOW || ns[ns.length-1] + n > HIGH){ toast('鍵盤の範囲外です'); return; }
+  state.notes = new Set(ns.map(m => m + n)); commitEdit();
+  render(); playAll();
+}
+function setT(t){
+  state.t = Math.max(-12, Math.min(12, t));
+  $('transpose').value = state.t;
+  render();
+}
+function save(){
+  if (editing()){
+    const n = state.cur + 1;
+    toast(endEdit() ? `キュー ${n} は空になったので削除しました` : `キュー ${n} の編集を終了しました`);
+    render(); return;
+  }
+  if (!state.notes.size){ toast('鍵盤を選んでから追加してください'); return; }
+  // 追加後は編集状態にせず、鍵盤を空にして次の形を作れるようにする
+  state.prog.push(sorted()); state.cur = -1; state.notes.clear();
+  render(); toast(`キューに追加しました（${state.prog.length}件）`);
+}
+
+// ---------- 画像出力 ----------
+const IMG = { bg:'#ffffff', text:'#1d1d1f', muted:'#77777c', line:'#e3e1dc', card:'#faf9f7',
+  white:'#ffffff', edge:'#b9b6ae', black:'#232428', accent:'#2f6fde', root:'#e2683c' };
+const FONT = '"Segoe UI","Segoe UI Symbol","Yu Gothic UI","Hiragino Sans",Meiryo,sans-serif';
+
+function chordInfo(notes){
+  const ns = [...notes].sort((a,b)=>a-b), snd = ns.map(sound);
+  const r = detect(snd), best = r && r.cands[0];
+  const map = best ? best.map : {};
+  const sp = m => map[mod(m)] || spellPc(m, state.acc);
+  let name;
+  if (best) name = best.name;
+  else if (r && r.pcs.length === 1) name = fmt(sp(snd[0])) + (ns.length > 1 ? '' : octaveOf(snd[0], sp(snd[0])));
+  else name = snd.map(m => fmt(sp(m))).join(' – ');
+  let shape = '';
+  if (state.t){
+    const w = detect(ns);
+    shape = w && w.cands[0] ? w.cands[0].name : ns.map(m => fmt(spellPc(m, state.acc))).join(' ');
+  }
+  const deg = best ? best.deg : null;
+  return { ns, snd, name, deg, shape, rootPc: best ? best.root : null,
+    main: state.deg && deg ? deg : name, sub: state.deg && deg ? name : '',
+    label: m => fmt(sp(m)), full: m => fmt(sp(m)) + octaveOf(m, sp(m)) };
+}
+
+function roundRect(g, x, y, w, h, r){
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function fitText(g, text, maxW, size, weight){
+  let s = size;
+  do { g.font = `${weight} ${s}px ${FONT}`; s--; } while (g.measureText(text).width > maxW && s > 10);
+}
+
+function drawMiniKeyboard(g, x, y, w, h, info){
+  const { ns } = info;
+  let lo = Math.floor(ns[0] / 12) * 12, hi = Math.floor(ns[ns.length - 1] / 12) * 12 + 11;
+  if (hi - lo < 23) hi = lo + 23;
+  hi = Math.min(hi + 1, 127); // 右端に次の C を置いて区切りを見やすく
+  const whites = []; for (let m = lo; m <= hi; m++) if (!isBlack(m)) whites.push(m);
+  const W = w / whites.length, on = new Set(ns);
+  const col = m => on.has(m) ? (info.rootPc !== null && mod(sound(m)) === info.rootPc ? IMG.root : IMG.accent) : null;
+  const wx = {};
+  whites.forEach((m, i) => {
+    wx[m] = x + i * W;
+    g.fillStyle = col(m) || IMG.white; g.strokeStyle = IMG.edge; g.lineWidth = 1;
+    roundRect(g, x + i * W, y, W, h, 3); g.fill(); g.stroke();
+    if (on.has(m)){
+      g.fillStyle = '#fff'; fitText(g, info.label(sound(m)), W - 2, Math.min(13, W * 0.55), 700);
+      g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(info.label(sound(m)), x + i * W + W / 2, y + h - 5);
+    }
+    if (m % 12 === 0){   // オクターブ位置（鍵盤上の位置）
+      g.fillStyle = m === 60 ? IMG.text : IMG.muted; g.font = `${m === 60 ? 700 : 500} 10px ${FONT}`;
+      g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText(m === 60 ? '中央C' : 'C' + (m / 12 - 1), x + i * W + W / 2, y + h + 4);
+    }
+  });
+  const bw = W * 0.62, bh = h * 0.6;
+  for (let m = lo; m <= hi; m++){
+    if (!isBlack(m)) continue;
+    const bx = wx[m + 1] - bw / 2;
+    g.fillStyle = col(m) || IMG.black;
+    roundRect(g, bx, y, bw, bh, 2); g.fill();
+    if (on.has(m)){
+      g.fillStyle = '#fff'; fitText(g, info.label(sound(m)), bw + 4, Math.min(11, bw * 0.6), 700);
+      g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(info.label(sound(m)), bx + bw / 2, y + bh - 3);
+    }
+  }
+}
+
+function buildImage(){
+  const list = (state.prog.length ? state.prog : (state.notes.size ? [sorted()] : [])).filter(a => a.length);
+  if (!list.length) return null;
+  const n = list.length;
+  const colSel = +$('imgCols').value;
+  const cols = colSel || (n <= 4 ? n : n <= 8 ? 4 : n <= 12 ? 4 : 5);
+  const rows = Math.ceil(n / cols);
+  const showShape = $('imgShape').checked && state.t !== 0;
+  const CW = 340, CH = showShape ? 262 : 244, GAP = 16, PAD = 28;
+  const title = $('imgTitle').value.trim();
+  const HEAD = 74;
+  const Wd = PAD * 2 + cols * CW + (cols - 1) * GAP;
+  const Ht = PAD + HEAD + rows * CH + (rows - 1) * GAP + PAD + 14;
+  const scale = 2;
+  const cv = document.createElement('canvas'); cv.width = Wd * scale; cv.height = Ht * scale;
+  const g = cv.getContext('2d'); g.scale(scale, scale);
+  g.fillStyle = IMG.bg; g.fillRect(0, 0, Wd, Ht);
+
+  // ヘッダー
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = IMG.text;
+  fitText(g, title || 'ピアノ ポジション', Wd - PAD * 2, 26, 700);
+  g.fillText(title || 'ピアノ ポジション', PAD, PAD + 28);
+  const d = new Date();
+  const meta = [`${n}ポジション`,
+    state.t ? `移調 ${state.t > 0 ? '+' : ''}${state.t}（コード名・音名は実音）` : '移調なし',
+    ...(state.deg ? [`キー ${keyLabel()}`] : []),
+    `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`].join('　·　');
+  g.font = `500 13px ${FONT}`; g.fillStyle = IMG.muted; g.fillText(meta, PAD, PAD + 52);
+  g.strokeStyle = IMG.line; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(PAD, PAD + HEAD - 8); g.lineTo(Wd - PAD, PAD + HEAD - 8); g.stroke();
+
+  // カード
+  list.forEach((notes, i) => {
+    const info = chordInfo(notes);
+    const cx = PAD + (i % cols) * (CW + GAP), cy = PAD + HEAD + Math.floor(i / cols) * (CH + GAP);
+    g.fillStyle = IMG.card; g.strokeStyle = IMG.line; roundRect(g, cx, cy, CW, CH, 12); g.fill(); g.stroke();
+    // 番号
+    g.fillStyle = IMG.accent; g.beginPath(); g.arc(cx + 24, cy + 28, 12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.font = `700 12px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(i + 1), cx + 24, cy + 28.5);
+    // コード名
+    g.fillStyle = IMG.text; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    let subW = 0;
+    if (info.sub){   // ディグリー表記: 右にコード名を小さく
+      fitText(g, info.sub, (CW - 64) * 0.45, 16, 600); subW = g.measureText(info.sub).width + 10;
+    }
+    fitText(g, info.main, CW - 64 - subW, 30, 700); g.fillText(info.main, cx + 46, cy + 39);
+    if (info.sub){
+      const mw = g.measureText(info.main).width;
+      g.fillStyle = IMG.muted; fitText(g, info.sub, (CW - 64) * 0.45, 16, 600);
+      g.fillText(info.sub, cx + 46 + mw + 10, cy + 39);
+    }
+    let ty = cy + 62;
+    if (showShape){
+      g.fillStyle = IMG.muted; g.font = `500 12px ${FONT}`;
+      g.fillText('押さえる形: ' + info.shape, cx + 16, ty); ty += 18;
+    }
+    g.fillStyle = IMG.muted; fitText(g, info.snd.map(info.full).join('  '), CW - 32, 13, 500);
+    g.fillText(info.snd.map(info.full).join('  '), cx + 16, ty);
+    drawMiniKeyboard(g, cx + 14, ty + 14, CW - 28, 132, info);
+  });
+
+  g.fillStyle = IMG.muted; g.font = `500 10px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+  g.fillText('オレンジ = ルート音', Wd - PAD, Ht - PAD + 4);
+  return cv;
+}
+
+// ---------- データ書き出し／読み込み（JSON） ----------
+const DATA_FORMAT = 'piano-position';
+const DATA_VERSION = 1;
+// 鍵盤位置は表記ゆれを避けるため常に ♯ 系の ASCII で書く（C4 = 中央C）
+const keyName = m => { const [l, a] = SHARP[mod(m)]; return LETTERS[l] + (a ? '#' : '') + (Math.floor(m / 12) - 1); };
+function parseKey(v){
+  if (typeof v === 'number' && Number.isInteger(v)) return v;          // MIDI 番号も可
+  const r = /^\s*([A-Ga-g])([#♯b♭]*)\s*(-?\d+)\s*$/.exec(String(v));
+  if (!r) throw new Error(`鍵盤名を読めません: "${v}"（例: C4, F#3, Bb2）`);
+  let pc = LETTER_PC['CDEFGAB'.indexOf(r[1].toUpperCase())];
+  for (const c of r[2]) pc += (c === '#' || c === '♯') ? 1 : -1;
+  return (+r[3] + 1) * 12 + pc;
+}
+function positionData(notes){
+  const sol = state.sol; state.sol = false;   // データ内の音名は常に英字
+  try {
+    const info = chordInfo(notes);
+    const o = { keys: info.ns.map(keyName), chord: info.name };
+    if (state.deg && info.deg) o.degree = info.deg;
+    if (state.t) o.shape = info.shape;
+    o.sounding = info.snd.map(info.full);
+    return o;
+  } finally { state.sol = sol; }
+}
+function exportData(){
+  const pad = v => String(v).padStart(2, '0'), d = new Date();
+  const obj = {
+    format: DATA_FORMAT,
+    version: DATA_VERSION,
+    exportedAt: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+    title: $('imgTitle').value.trim(),
+    settings: {
+      transpose: state.t,
+      accidentals: state.acc,
+      noteNames: state.sol ? 'solfege' : 'letter',
+      key: keyLabel().replace('♭', 'b').replace('♯', '#'),
+      degree: state.deg,
+      image: { columns: +$('imgCols').value, showShape: $('imgShape').checked },
+    },
+    current: state.notes.size ? positionData(state.notes) : null,
+    queue: state.prog.filter(a => a.length).map(positionData),
+  };
+  // 短い配列・位置オブジェクトは1行にまとめて読みやすく
+  return JSON.stringify(obj, null, 2)
+    .replace(/\[\s+((?:"[^"]*"|-?\d+)(?:,\s+(?:"[^"]*"|-?\d+))*)\s+\]/g, (_, a) => '[' + a.replace(/,\s+/g, ', ') + ']');
+}
+
+// 読み込み: JSON（このアプリの形式 / 位置の配列）または共有コード
+function parseData(text){
+  text = text.trim();
+  if (!text) throw new Error('データが空です');
+  if (!/^[\[{]/.test(text)){
+    const tmp = { ...state, notes: new Set(state.notes), prog: state.prog.slice() };
+    if (!/(^|[#&])(t|n|p|a|k|d)=/.test(text) || !decode(text)) throw new Error('JSON でも共有コードでもありません');
+    const out = { settings: { transpose: state.t, accidentals: state.acc, key: state.key, minor: state.minor, deg: state.deg },
+      current: sorted(), queue: state.prog.map(a => a.slice()) };
+    Object.assign(state, tmp);               // decode が書き換えた状態を戻す
+    return out;
+  }
+  let obj;
+  try { obj = JSON.parse(text); } catch(e){ throw new Error('JSON の書式エラー: ' + e.message); }
+  if (Array.isArray(obj)) obj = { queue: obj };
+  if (typeof obj !== 'object' || !obj) throw new Error('JSON の形が想定と違います');
+  if (obj.format && obj.format !== DATA_FORMAT) throw new Error(`別の形式のデータです (format: ${obj.format})`);
+  if (obj.version > DATA_VERSION) throw new Error(`新しいバージョンのデータです (version ${obj.version})。アプリを更新してください`);
+
+  const toNotes = (p, where) => {
+    const list = Array.isArray(p) ? p : p && Array.isArray(p.keys) ? p.keys : p && Array.isArray(p.midi) ? p.midi : null;
+    if (!list) throw new Error(`${where}: "keys" がありません`);
+    const ms = list.map(v => {
+      let m; try { m = parseKey(v); } catch(e){ throw new Error(`${where}: ${e.message}`); }
+      if (m < LOW || m > HIGH) throw new Error(`${where}: ${typeof v === 'number' ? keyName(m) : v} は鍵盤の範囲外です（${keyName(LOW)}〜${keyName(HIGH)}）`);
+      return m;
+    });
+    return [...new Set(ms)].sort((a, b) => a - b);
+  };
+  const queue = (obj.queue || []).map((p, i) => toNotes(p, `queue の ${i + 1} 番目`)).filter(a => a.length);
+  const current = obj.current ? toNotes(obj.current, 'current') : null;
+  const s = obj.settings || {};
+  const settings = {};
+  if (s.transpose !== undefined){
+    if (!Number.isInteger(s.transpose) || Math.abs(s.transpose) > 12) throw new Error('settings.transpose は -12〜12 の整数にしてください');
+    settings.transpose = s.transpose;
+  }
+  if (s.accidentals !== undefined){
+    if (!['auto', 'sharp', 'flat'].includes(s.accidentals)) throw new Error('settings.accidentals は auto / sharp / flat のどれかです');
+    settings.accidentals = s.accidentals;
+  }
+  if (s.noteNames !== undefined) settings.sol = s.noteNames === 'solfege';
+  if (s.key !== undefined){
+    const r = /^\s*([A-Ga-g])([#♯b♭]?)\s*(m|min|minor)?\s*$/.exec(String(s.key));
+    if (!r) throw new Error('settings.key はキー名にしてください（例: "C", "Eb", "F#m", "Am"）');
+    let pc = LETTER_PC['CDEFGAB'.indexOf(r[1].toUpperCase())];
+    if (r[2]) pc += (r[2] === '#' || r[2] === '♯') ? 1 : -1;
+    settings.key = mod(pc); settings.minor = !!r[3];
+  }
+  if (s.degree !== undefined) settings.deg = !!s.degree;
+  if (s.image) settings.image = s.image;
+  if (!queue.length && !current) throw new Error('読み込めるポジションがありません（queue / current が空）');
+  return { title: typeof obj.title === 'string' ? obj.title : undefined, settings, current, queue };
+}
+
+function applyData(d, mode){
+  if (mode === 'append'){
+    state.prog.push(...d.queue);
+    if (!d.queue.length && d.current) state.prog.push(d.current);
+    state.cur = -1;
+  } else {
+    const s = d.settings;
+    if (s.transpose !== undefined) state.t = s.transpose;
+    if (s.accidentals) state.acc = s.accidentals;
+    if (s.sol !== undefined) state.sol = s.sol;
+    if (s.key !== undefined){ state.key = s.key; state.minor = !!s.minor; }
+    if (s.deg !== undefined) state.deg = s.deg;
+    if (s.image){
+      if ([0,1,2,3,4,5,6].includes(s.image.columns)) $('imgCols').value = s.image.columns;
+      if (typeof s.image.showShape === 'boolean') $('imgShape').checked = s.image.showShape;
+    }
+    if (d.title !== undefined) $('imgTitle').value = d.title;
+    state.prog = d.queue;
+    state.notes = new Set(d.current || []);
+    state.cur = -1;
+  }
+  syncUI(); render();
+}
+
+function dataMsg(text, ok){
+  const el = $('dataMsg'); el.textContent = text; el.style.color = ok ? 'var(--accent)' : 'var(--root)';
+}
+function openDataModal(text){
+  $('dataText').value = text !== undefined ? text : exportData();
+  dataMsg(text !== undefined ? 'ファイルを読み込みました。「置き換え」か「追加」で反映します。' : '', true);
+  $('dataModal').classList.add('show');
+}
+function importFromText(mode){
+  try {
+    const d = parseData($('dataText').value);
+    if (mode !== 'append' && (state.prog.length || state.notes.size) &&
+        !confirm(`今のキュー（${state.prog.length}件）と鍵盤の選択を置き換えます。よろしいですか？`)) return;
+    applyData(d, mode);
+    $('dataModal').classList.remove('show');
+    toast(mode === 'append' ? `${d.queue.length || 1}件をキューに追加しました` : `読み込みました（キュー ${d.queue.length}件）`);
+  } catch(e){ dataMsg('読み込めません: ' + e.message, false); }
+}
+function readFile(file){
+  if (!file) return;
+  if (file.size > 2e6){ toast('ファイルが大きすぎます'); return; }
+  const r = new FileReader();
+  r.onload = () => openDataModal(String(r.result));
+  r.readAsText(file, 'utf-8');
+}
+function saveDataFile(){
+  const blob = new Blob([$('dataText').value], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = imgFileName().replace(/\.png$/, '.json');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('.json を保存しました');
+}
+let syncUI = () => {};
+
+let lastBlob = null;
+function exportImage(){
+  const cv = buildImage();
+  if (!cv){ toast('キューが空です。形を作って「キューに追加」してください'); return; }
+  cv.toBlob(b => {
+    lastBlob = b;
+    const url = URL.createObjectURL(b);
+    const img = $('previewImg');
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.src = url;
+    $('modal').classList.add('show');
+  }, 'image/png');
+}
+function imgFileName(){
+  const d = new Date(), p = v => String(v).padStart(2, '0');
+  const t = ($('imgTitle').value.trim() || 'piano-positions').replace(/[\\/:*?"<>|]/g, '_');
+  return `${t}_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.png`;
+}
+function downloadImage(){
+  if (!lastBlob) return;
+  const a = document.createElement('a');
+  a.href = $('previewImg').src; a.download = imgFileName(); document.body.appendChild(a); a.click(); a.remove();
+  toast('ダウンロードしました');
+}
+async function copyImage(){
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': lastBlob })]);
+    toast('画像をコピーしました。チャットなどに貼り付けできます');
+  } catch(e){ toast('このブラウザでは画像コピーできません。保存を使ってください'); }
+}
+let progTimer = [];
+function playProg(){
+  progTimer.forEach(clearTimeout); progTimer = [];
+  if (!state.prog.length) return;
+  endEdit();
+  const list = state.prog.slice();
+  list.forEach((notes, i) => progTimer.push(setTimeout(() => {
+    // 再生中は選択（編集）状態にしない。どれを再生中かはキュー番号で表示
+    state.notes = new Set(notes); state.cur = -1; render(); playAll();
+    const el = $('slots').children[i]; if (el) el.style.borderColor = 'var(--accent)';
+  }, i * 1300)));
+}
+
+// ---------- 共有 ----------
+function encode(){
+  const p = new URLSearchParams();
+  if (state.t) p.set('t', state.t);
+  if (state.notes.size) p.set('n', sorted().join('.'));
+  if (state.prog.length) p.set('p', state.prog.map(a => a.join('.')).join('-'));
+  if (state.acc !== 'auto') p.set('a', state.acc);
+  if (state.key || state.minor) p.set('k', state.key + (state.minor ? 'm' : ''));
+  if (state.deg) p.set('d', '1');
+  return p.toString();
+}
+function decode(str){
+  const p = new URLSearchParams(str.replace(/^.*#/, '').trim());
+  const nums = s => (s || '').split('.').map(Number).filter(m => m >= LOW && m <= HIGH);
+  if (![...p.keys()].length) return false;
+  state.t = Math.max(-12, Math.min(12, +p.get('t') || 0));
+  state.notes = new Set(nums(p.get('n')));
+  state.prog = p.get('p') ? p.get('p').split('-').map(nums).filter(a => a.length) : [];
+  state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';
+  const k = /^(\d+)(m?)$/.exec(p.get('k') || '');
+  state.key = k ? mod(+k[1]) : 0; state.minor = !!(k && k[2]);
+  state.deg = p.get('d') === '1';
+  state.cur = -1;
+  return true;
+}
+function persist(){
+  const code = encode();
+  try { history.replaceState(null, '', code ? '#' + code : location.pathname); } catch(e) {}
+  try { localStorage.setItem('piano-pos', JSON.stringify({ code, sol: state.sol, all: state.all, playOnAdd: state.playOnAdd, title: $('imgTitle').value, cols: $('imgCols').value, shape: $('imgShape').checked })); } catch(e) {}
+}
+async function copy(text, msg){
+  try { await navigator.clipboard.writeText(text); }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(msg);
+}
+function shareText(){
+  const lines = [];
+  const tStr = state.t ? `（移調 ${state.t > 0 ? '+' : ''}${state.t}・実音表記）` : '';
+  if (state.notes.size){
+    const snd = sorted().map(sound);
+    const r = detect(snd); const map = r && r.cands[0] ? r.cands[0].map : {};
+    const nm = m => { const sp = map[mod(m)] || spellPc(m, state.acc); return fmt(sp) + octaveOf(m, sp); };
+    const best = r && r.cands[0];
+    const head = best ? (state.deg ? `${best.deg}（${best.name}・キー ${keyLabel()}）` : best.name) : $('chord').textContent;
+    lines.push(`${head} ${tStr}`.trim());
+    lines.push('構成音（低い順）: ' + snd.map(nm).join(' '));
+  }
+  if (state.prog.length){
+    lines.push('進行: ' + state.prog.map(slotName).join(' → '));
+    if (state.deg){   // ディグリー表記時はコード名の進行も併記
+      const sd = state.deg; state.deg = false;
+      try { lines.push(`　　　(${state.prog.map(slotName).join(' → ')}・キー ${keyLabel()})`); } finally { state.deg = sd; }
+    }
+  }
+  lines.push('共有コード: ' + (encode() || '(空)'));
+  return lines.join('\n');
+}
+let toastT;
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+// ---------- UI 初期化 ----------
+(function initUI(){
+  const sel = $('transpose');
+  const hint = { '-2': 'B♭管と同じ', '-9': 'E♭管(アルト)と同じ', '-7': 'F管と同じ', '3': 'E♭管と同じ(オクターブ違い)' };
+  for (let t = -12; t <= 12; t++){
+    const o = document.createElement('option'); o.value = t;
+    const to = fmtLetter(spellPc(t, t < 0 ? 'flat' : 'auto'));
+    o.textContent = (t === 0 ? '0（なし）' : `${t > 0 ? '+' : ''}${t}　C→${to}${Math.abs(t) === 12 ? (t > 0 ? '↑oct' : '↓oct') : ''}`) + (hint[t] ? `　${hint[t]}` : '');
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => { setT(+sel.value); if (state.notes.size) playAll(); });
+  $('tDown').onclick = () => { setT(state.t - 1); if (state.notes.size) playAll(); };
+  $('tUp').onclick   = () => { setT(state.t + 1); if (state.notes.size) playAll(); };
+
+  const keySel = $('keySel');
+  [false, true].forEach(minor => {
+    const og = document.createElement('optgroup'); og.label = minor ? 'マイナー' : 'メジャー';
+    for (let pc = 0; pc < 12; pc++){
+      const o = document.createElement('option'); o.value = pc + (minor ? 'm' : '');
+      o.textContent = keyLabel(pc, minor); og.appendChild(o);
+    }
+    keySel.appendChild(og);
+  });
+  keySel.addEventListener('change', () => {
+    state.key = parseInt(keySel.value, 10); state.minor = keySel.value.endsWith('m'); render();
+  });
+
+  const segs = () => {
+    $('accSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === state.acc));
+    $('solSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === (state.sol ? '1' : '0')));
+    $('degSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === (state.deg ? '1' : '0')));
+    keySel.value = state.key + (state.minor ? 'm' : '');
+    keySel.disabled = !state.deg;
+  };
+  syncUI = () => {
+    segs(); sel.value = state.t;
+    $('allLabels').checked = state.all; $('playOnAdd').checked = state.playOnAdd;
+  };
+  $('accSeg').onclick = e => { if (e.target.dataset.v){ state.acc = e.target.dataset.v; segs(); render(); } };
+  $('solSeg').onclick = e => { if (e.target.dataset.v){ state.sol = e.target.dataset.v === '1'; segs(); render(); } };
+  $('degSeg').onclick = e => { if (e.target.dataset.v){ state.deg = e.target.dataset.v === '1'; segs(); render(); } };
+  $('allLabels').onchange = e => { state.all = e.target.checked; render(); };
+  $('playOnAdd').onchange = e => { state.playOnAdd = e.target.checked; persist(); };
+
+  $('playAll').onclick = playAll;
+  $('arp').onclick = playArp;
+  // 編集中: 1回目は編集を終了するだけ（キューは消さない）。編集していなければ鍵盤をクリア
+  $('clear').onclick = () => {
+    if (editing()){ endEdit(); render(); toast('編集を終了しました'); return; }
+    state.notes.clear(); render();
+  };
+  $('save').onclick = save;
+  $('shiftDown').onclick = () => shift(-1);
+  $('shiftUp').onclick = () => shift(1);
+  $('playProg').onclick = playProg;
+  $('clearProg').onclick = () => { if (state.prog.length && confirm('キューをすべて削除しますか？')){ state.prog = []; state.cur = -1; render(); } };
+  $('exportImg').onclick = exportImage;
+  $('dlImg').onclick = downloadImage;
+  $('copyImg').onclick = copyImage;
+  $('closeModal').onclick = () => $('modal').classList.remove('show');
+  $('modal').onclick = e => { if (e.target.id === 'modal') $('modal').classList.remove('show'); };
+  $('imgTitle').addEventListener('input', persist);
+  $('imgCols').addEventListener('change', persist);
+  $('imgShape').addEventListener('change', persist);
+  $('copyText').onclick = () => copy(shareText(), 'テキストをコピーしました');
+  $('copyCode').onclick = () => copy(encode() || '', '共有コードをコピーしました');
+  $('loadCode').onclick = () => {
+    const v = $('codeIn').value;
+    if (v && decode(v)){ $('transpose').value = state.t; segs(); render(); $('codeIn').value = ''; toast('読み込みました'); }
+    else toast('共有コードを読み取れませんでした');
+  };
+  $('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.stopPropagation(); $('loadCode').click(); } });
+
+  // データ（JSON）
+  const closeData = () => $('dataModal').classList.remove('show');
+  $('openData').onclick = () => openDataModal();
+  $('dataRefresh').onclick = () => { $('dataText').value = exportData(); dataMsg('現在の内容を表示しました', true); };
+  $('dataCopy').onclick = () => copy($('dataText').value, 'データをコピーしました');
+  $('dataSave').onclick = saveDataFile;
+  $('dataOpen').onclick = () => $('dataFile').click();
+  $('dataFile').onchange = e => { readFile(e.target.files[0]); e.target.value = ''; };
+  $('dataReplace').onclick = () => importFromText('replace');
+  $('dataAppend').onclick = () => importFromText('append');
+  $('dataClose').onclick = closeData;
+  $('dataModal').onclick = e => { if (e.target.id === 'dataModal') closeData(); };
+  // .json ファイルをページにドロップ
+  document.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f){ e.preventDefault(); readFile(f); }
+  });
+
+  // 編集中に鍵盤・キュー・再生などの操作ボタン以外を押したら編集を終了
+  document.addEventListener('pointerdown', e => {
+    if (!editing()) return;
+    if (e.target.closest('#keys, .slot, .actions, .modal')) return;
+    endEdit(); render();
+  });
+
+  document.addEventListener('keydown', e => {
+    const open = document.querySelector('.modal.show');
+    if (open){ if (e.key === 'Escape') open.classList.remove('show'); return; }
+    if (e.target.matches('input[type=text], select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k === ' '){ e.preventDefault(); e.shiftKey ? playArp() : playAll(); }
+    else if (k === 'Escape'){ $('clear').click(); }
+    else if (k === 'Enter'){ e.preventDefault(); save(); }
+    else if (k === 'ArrowLeft'){ e.preventDefault(); shift(-1); }
+    else if (k === 'ArrowRight'){ e.preventDefault(); shift(1); }
+    else if (k === 'ArrowUp'){ e.preventDefault(); shift(12); }
+    else if (k === 'ArrowDown'){ e.preventDefault(); shift(-12); }
+    else if (k === '['){ $('tDown').click(); }
+    else if (k === ']'){ $('tUp').click(); }
+    else if (k === 'd' || k === 'D'){ state.deg = !state.deg; segs(); render(); toast(state.deg ? `ディグリー表記（キー ${keyLabel()}）` : 'コード名表記'); }
+  });
+
+  // 復元: URL の # が優先、なければ前回の状態
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('piano-pos') || '{}'); } catch(e) {}
+  state.sol = !!saved.sol; state.all = !!saved.all; state.playOnAdd = !!saved.playOnAdd;
+  if (!(location.hash.length > 1 && decode(location.hash)) && saved.code) decode(saved.code);
+  $('imgTitle').value = saved.title || ''; $('imgCols').value = saved.cols || '0'; $('imgShape').checked = saved.shape !== false;
+  $('allLabels').checked = state.all; $('playOnAdd').checked = state.playOnAdd;
+  sel.value = state.t; segs(); render();
+  // 中央付近へスクロール（狭い画面用）
+  const sc = document.querySelector('.kb-scroll'); sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+})();
+</script>
+</body>
+</html>
