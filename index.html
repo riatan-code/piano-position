@@ -1127,26 +1127,108 @@ function playProg(){
 }
 
 // ---------- 共有 ----------
+// ---------- 共有 URL（短縮形式） ----------
 // URL に入れるのはトランスポーズ・キュー・キーだけ。押さえている音・臨時記号・読み方は入れない
 // （臨時記号は「自動」、読み方は「固定ド」が既定。各自の設定はブラウザに保存）
+// 1本のビット列に詰めて URL 用の 64 文字（A–Z a–z 0–9 - _）で書く。人が読む必要はない
+//   版 2b(=1) | t あり 1b [+ t+12 5b] | キー あり 1b [+ キー 4b + マイナー 1b] | 重複あり 1b
+//   コードごとに: 続く 1b(=1) | [重複ありなら 参照 1b(+ 何番目か)] | 最低音-24 6b | 音数 3b(7=拡張 +5b) | 音程の符号…
+//   終わり 1b(=0)
+// 音程の符号（和音は3度が多いので短く）: 4=00 3=01 2=100 5=101 1=1100 6=1101 7=1110 8以上=1111+6b
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const IV_CODE = { 4: '00', 3: '01', 2: '100', 5: '101', 1: '1100', 6: '1101', 7: '1110' };
+const bitsFor = n => n <= 1 ? 0 : Math.ceil(Math.log2(n));   // 0..n-1 を表すビット数
 function encode(){
-  const p = new URLSearchParams();
-  if (state.t) p.set('t', state.t);
-  if (state.prog.length) p.set('p', state.prog.map(a => a.join('.')).join('-'));
-  if (state.key || state.minor) p.set('k', state.key + (state.minor ? 'm' : ''));
-  return p.toString();
+  const chords = state.prog.map(a => [...a].sort((x, y) => x - y)).filter(a => a.length);
+  if (!state.t && !state.key && !state.minor && !chords.length) return '';
+  let bits = '';
+  const put = (v, n) => { if (n) bits += v.toString(2).padStart(n, '0'); };
+  put(1, 2);
+  if (state.t){ put(1, 1); put(state.t + 12, 5); } else put(0, 1);
+  if (state.key || state.minor){ put(1, 1); put(state.key, 4); put(state.minor ? 1 : 0, 1); } else put(0, 1);
+  const id = a => a.join('.');
+  const hasRep = new Set(chords.map(id)).size < chords.length;
+  put(hasRep ? 1 : 0, 1);
+  const uniq = [];
+  chords.forEach(a => {
+    put(1, 1);
+    if (hasRep){
+      const k = uniq.indexOf(id(a));
+      if (k >= 0){ put(1, 1); put(k, bitsFor(uniq.length)); return; }
+      put(0, 1); uniq.push(id(a));
+    }
+    put(a[0] - 24, 6);
+    if (a.length <= 7) put(a.length - 1, 3); else { put(7, 3); put(a.length - 8, 5); }
+    for (let i = 1; i < a.length; i++){
+      const d = a[i] - a[i - 1];
+      if (IV_CODE[d]) bits += IV_CODE[d]; else { bits += '1111'; put(d - 8, 6); }
+    }
+  });
+  put(0, 1);
+  while (bits.length % 6) bits += '0';
+  let out = '';
+  for (let i = 0; i < bits.length; i += 6) out += B64[parseInt(bits.slice(i, i + 6), 2)];
+  return out;
+}
+// 短縮形式を読む。壊れていたら null
+function unpack(str){
+  let bits = '';
+  for (const ch of str){ const v = B64.indexOf(ch); if (v < 0) return null; bits += v.toString(2).padStart(6, '0'); }
+  let pos = 0;
+  const get = n => {
+    if (!n) return 0;
+    if (pos + n > bits.length) throw new Error('short');
+    const v = parseInt(bits.slice(pos, pos + n), 2); pos += n; return v;
+  };
+  const iv = () => {
+    if (!get(1)) return get(1) ? 3 : 4;
+    if (!get(1)) return get(1) ? 5 : 2;
+    if (!get(1)) return get(1) ? 6 : 1;
+    return get(1) ? get(6) + 8 : 7;
+  };
+  try {
+    if (get(2) !== 1) return null;
+    const t = get(1) ? get(5) - 12 : 0;
+    let key = 0, minor = false;
+    if (get(1)){ key = get(4); minor = !!get(1); }
+    const hasRep = get(1), uniq = [], prog = [];
+    while (get(1)){
+      if (hasRep && get(1)){
+        const k = get(bitsFor(uniq.length));
+        if (!uniq[k]) return null;
+        prog.push(uniq[k].slice()); continue;
+      }
+      const a = [get(6) + 24];
+      let n = get(3) + 1; if (n === 8) n = get(5) + 8;
+      for (let i = 1; i < n; i++) a.push(a[i - 1] + iv());
+      prog.push(a); if (hasRep) uniq.push(a);
+    }
+    return { t, key, minor, prog };
+  } catch(e){ return null; }
 }
 function decode(str){
-  const p = new URLSearchParams(str.replace(/^.*#/, '').trim());
+  const h = str.replace(/^.*#/, '').trim();
+  if (!h) return false;
+  if (h.includes('=')) return decodeLegacy(h);   // 以前の形式（t=…&p=…）
+  const r = unpack(h); if (!r) return false;
+  state.t = Math.max(-12, Math.min(12, r.t));
+  state.key = mod(r.key); state.minor = r.minor;
+  state.prog = r.prog.map(a => a.filter(m => m >= LOW && m <= HIGH)).filter(a => a.length);
+  state.notes = new Set(); state.cur = -1;
+  return true;
+}
+// 以前の形式のリンク（t=…&n=…&p=…&a=…&k=…&s=…）を読む
+function decodeLegacy(h){
+  const p = new URLSearchParams(h);
   const nums = s => (s || '').split('.').map(Number).filter(m => m >= LOW && m <= HIGH);
   if (![...p.keys()].length) return false;
   state.t = Math.max(-12, Math.min(12, +p.get('t') || 0));
   state.notes = new Set(nums(p.get('n')));
   state.prog = p.get('p') ? p.get('p').split('-').map(nums).filter(a => a.length) : [];
-  if (p.has('a')) state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';   // 古いリンク用（指定がなければ自分の設定のまま）
+  if (p.has('a')) state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';   // 指定がなければ自分の設定のまま
   const k = /^(\d+)(m?)$/.exec(p.get('k') || '');
   state.key = k ? mod(+k[1]) : 0; state.minor = !!(k && k[2]);
-  if (p.has('s')) state.sol = toSolMode(p.get('s'));   // 読み方指定のリンク（指定がなければ自分の設定のまま）
+  if (p.has('s')) state.sol = toSolMode(p.get('s'));   // 指定がなければ自分の設定のまま
   state.cur = -1;
   return true;
 }
