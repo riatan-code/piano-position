@@ -846,8 +846,8 @@ function buildImageInner(how){
 
   // ヘッダー
   g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = IMG.text;
-  fitText(g, title || 'ピアノ ポジション', Wd - PAD * 2, 26, 700);
-  g.fillText(title || 'ピアノ ポジション', PAD, PAD + 28);
+  fitText(g, title || 'Piano Position', Wd - PAD * 2, 26, 700);
+  g.fillText(title || 'Piano Position', PAD, PAD + 28);
   if (meta){ g.font = `500 13px ${FONT}`; g.fillStyle = IMG.muted; g.fillText(meta, PAD, PAD + 52); }
   g.strokeStyle = IMG.line; g.lineWidth = 1;
   g.beginPath(); g.moveTo(PAD, PAD + HEAD - 8); g.lineTo(Wd - PAD, PAD + HEAD - 8); g.stroke();
