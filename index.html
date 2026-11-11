@@ -109,9 +109,13 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
 .prog-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:14px}
 .prog-head .t{font-weight:650}
 .prog-head .muted{color:var(--muted);font-size:13px}
+.prog-head .cnt{color:var(--muted);font-size:13px;margin-right:6px;font-variant-numeric:tabular-nums}
+#playProg{border-color:var(--accent);color:var(--accent);font-weight:600;min-width:7.2em}
+#playProg.playing{background:var(--accent);color:#fff}
+#clearProg{border-color:transparent;background:transparent;color:var(--muted)}
+#clearProg:hover:not(:disabled){border-color:var(--root);color:var(--root)}
 .slots{display:flex;flex-wrap:wrap;gap:8px}
 .slot{position:relative;border:1px solid var(--line);border-radius:10px;padding:8px 26px 8px 12px;cursor:pointer;background:var(--bg);min-width:70px}
-.slot:hover{border-color:var(--accent)}
 .slot.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .slot .n{font-weight:700;font-size:16px}
 .slot .i{font-size:11px;color:var(--muted)}
@@ -197,10 +201,10 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
 
   <div class="prog">
     <div class="prog-head">
-      <span class="t">コード</span>
+      <span class="t">コード</span><span class="cnt" id="progCnt"></span>
+      <button class="sm" id="playProg" title="追加したコードを順に鳴らす（再生中はもう一度押すと停止）">▶ 順に再生</button>
       <span style="flex:1"></span>
-      <button class="sm" id="playProg">▶ 順に再生</button>
-      <button class="sm" id="clearProg">全削除</button>
+      <button class="sm" id="clearProg" title="追加したコードをすべて削除">全削除</button>
     </div>
     <div class="slots" id="slots"></div>
   </div>
@@ -621,6 +625,9 @@ function slotSub(notes){
 }
 function renderSlots(){
   const box = $('slots'); box.innerHTML = '';
+  const n = state.prog.length;
+  $('progCnt').textContent = n ? `${n}` : '';
+  $('playProg').disabled = !n && !progTimer.length; $('clearProg').disabled = !n;
   if (!state.prog.length){
     box.innerHTML = '<span class="empty-slot">まだありません。鍵盤で和音を作って「追加」(Enter)。</span>';
     return;
@@ -1028,16 +1035,26 @@ async function copyImage(){
   } catch(e){ toast('このブラウザでは画像コピーできません。保存を使ってください'); }
 }
 let progTimer = [];
-function playProg(){
+function setPlaying(on){
+  const b = $('playProg');
+  b.classList.toggle('playing', on); b.textContent = on ? '■ 停止' : '▶ 順に再生';
+}
+function stopProg(){
   progTimer.forEach(clearTimeout); progTimer = [];
+  setPlaying(false); renderSlots();
+}
+function playProg(){
+  if (progTimer.length){ stopProg(); return; }   // 再生中にもう一度押す → 停止
   if (!state.prog.length) return;
   endEdit();
   const list = state.prog.slice();
+  setPlaying(true);
   list.forEach((notes, i) => progTimer.push(setTimeout(() => {
-    // 再生中は選択（編集）状態にしない。どれを再生中かはキュー番号で表示
+    // 再生中は選択（編集）状態にしない。どれを再生中かは枠の色で表示
     state.notes = new Set(notes); state.cur = -1; render(); playAll();
     const el = $('slots').children[i]; if (el) el.style.borderColor = 'var(--accent)';
   }, i * 1300)));
+  progTimer.push(setTimeout(() => { progTimer = []; setPlaying(false); renderSlots(); }, list.length * 1300));
 }
 
 // ---------- 共有 ----------
@@ -1187,7 +1204,7 @@ function toast(msg){
   };
   $('save').onclick = save;
   $('playProg').onclick = playProg;
-  $('clearProg').onclick = () => { if (state.prog.length && confirm('コードをすべて削除しますか？')){ state.prog = []; state.cur = -1; render(); } };
+  $('clearProg').onclick = () => { if (state.prog.length && confirm(`コード ${state.prog.length} 個をすべて削除しますか？`)){ if (progTimer.length) stopProg(); state.prog = []; state.cur = -1; render(); } };
   $('exportImg').onclick = exportImage;
   $('dlImg').onclick = downloadImage;
   $('copyImg').onclick = copyImage;
