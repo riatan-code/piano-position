@@ -530,7 +530,7 @@ function toggle(pos){
 // ---------- キューの編集 ----------
 const editing = () => state.cur >= 0 && state.cur < state.prog.length;
 // 編集中なら鍵盤の内容を選択中のキューに書き戻す
-function commitEdit(){ if (editing()) state.prog[state.cur] = sorted(); }
+function commitEdit(){ if (editing()){ const a = state.prog[state.cur]; a.splice(0, a.length, ...sorted()); } }   // 同じ配列のまま中身を更新（元に戻すの対象を追えるように）
 // 編集を終了（鍵盤はリセット。空になったコードは取り除く）。取り除いたら true
 function endEdit(){
   const i = state.cur; state.cur = -1;
@@ -670,9 +670,9 @@ function renderSlots(){
     s.addEventListener('click', e => {
       if (e.target.closest('.dup')){ dupSlot(i); return; }
       if (e.target.classList.contains('x')){
-        pushUndo();
-        state.prog.splice(i, 1);
+        const [gone] = state.prog.splice(i, 1);
         if (state.cur === i) state.cur = -1; else if (state.cur > i) state.cur--;
+        recordOp({ t: 'del', i, item: gone });
         render(); toast(`コード ${i + 1} を削除しました（Ctrl+Z で元に戻す）`); return;
       }
       if (i === state.cur){ endEdit(); render(); return; }   // 選択中をもう一度クリック → 編集終了
@@ -681,33 +681,61 @@ function renderSlots(){
     box.appendChild(s);
   });
 }
-// ---------- 元に戻す／やり直す（コードの複製・削除） ----------
+// ---------- 元に戻す／やり直す（キューのコードの追加・複製・削除だけが対象） ----------
+// 操作ごとに記録し、その操作だけを取り消す。鍵盤の音・選択・コードの修正内容には触れない
+//   ins: item を i に入れた / del: i の item を消した / clr: items を全削除した
 const undoStack = [], redoStack = [];
-const snap = () => ({ prog: state.prog.map(a => a.slice()), cur: state.cur, notes: [...state.notes] });
-function pushUndo(){
-  undoStack.push(snap()); if (undoStack.length > 50) undoStack.shift();
+function recordOp(op){
+  undoStack.push(op); if (undoStack.length > 50) undoStack.shift();
   redoStack.length = 0;
 }
-function restore(from, to, msg){
-  if (!from.length){ toast(msg === 'undo' ? '元に戻せる操作はありません' : 'やり直せる操作はありません'); return; }
-  if (progTimer.length) stopProg();
-  to.push(snap());
-  const s = from.pop();
-  state.prog = s.prog; state.cur = s.cur; state.notes = new Set(s.notes);
-  render();   // 音は鳴らさない
-  toast(msg === 'undo' ? '元に戻しました' : 'やり直しました');
+function clearHistory(){ undoStack.length = 0; redoStack.length = 0; }
+function qRemove(item){
+  const k = state.prog.indexOf(item); if (k < 0) return false;
+  state.prog.splice(k, 1);
+  if (state.cur === k) state.cur = -1; else if (state.cur > k) state.cur--;
+  return true;
 }
-const undo = () => restore(undoStack, redoStack, 'undo');
-const redo = () => restore(redoStack, undoStack, 'redo');
+function qInsert(item, i){
+  i = Math.min(i, state.prog.length);
+  state.prog.splice(i, 0, item);
+  if (state.cur >= i) state.cur++;
+  return true;
+}
+// back=true: 取り消す / false: やり直す。適用できたら true
+function applyOp(op, back){
+  if (op.t === 'clr'){
+    if (back){ state.prog = op.items.concat(state.prog); if (state.cur >= 0) state.cur += op.items.length; return true; }
+    let ok = false; op.items.forEach(it => { ok = qRemove(it) || ok; }); return ok;
+  }
+  const remove = (op.t === 'ins') === back;
+  return remove ? qRemove(op.item) : qInsert(op.item, op.i);
+}
+const UNDO_MSG = { ins: '追加を取り消しました', del: '削除を取り消しました', clr: '全削除を取り消しました' };
+function stepHistory(back){
+  const from = back ? undoStack : redoStack, to = back ? redoStack : undoStack;
+  while (from.length){
+    const op = from.pop();
+    if (!applyOp(op, back)) continue;   // 対象がもうない（読み込みで入れ替わった等）→ 次へ
+    to.push(op);
+    if (progTimer.length) stopProg();
+    render();   // 音は鳴らさない
+    toast(back ? UNDO_MSG[op.t] : 'やり直しました');
+    return;
+  }
+  toast(back ? '元に戻せる操作はありません' : 'やり直せる操作はありません');
+}
+const undo = () => stepHistory(true);
+const redo = () => stepHistory(false);
 
 // コードを複製して to の位置（省略時は最後尾）に入れ、複製した方を選択して鳴らす（そのまま修正できる）
 function dupSlot(from, to = state.prog.length){
   if (!state.prog[from]) return;
   if (progTimer.length) stopProg();
-  pushUndo();
   const copy = state.prog[from].slice();
   const curItem = editing() ? state.prog[state.cur] : null;
   state.prog.splice(to, 0, copy);
+  recordOp({ t: 'ins', i: to, item: copy });
   state.cur = curItem ? state.prog.indexOf(curItem) : -1;
   selectSlot(state.prog.indexOf(copy)); playAll();
   const el = $('slots').children[state.cur]; if (el) el.classList.add('flash');
@@ -749,8 +777,10 @@ function save(){
   }
   if (!state.notes.size){ toast('鍵盤を選んでから追加してください'); return; }
   // 追加後は編集状態にせず、鍵盤を空にして次の形を作れるようにする
-  state.prog.push(sorted()); state.cur = -1; state.notes.clear();
-  render(); toast(`追加しました（${state.prog.length}件）`);
+  const item = sorted();
+  state.prog.push(item); state.cur = -1; state.notes.clear();
+  recordOp({ t: 'ins', i: state.prog.length - 1, item });
+  render(); toast(`追加しました（${state.prog.length}件・Ctrl+Z で取り消し）`);
 }
 
 // ---------- 画像出力 ----------
@@ -1000,7 +1030,7 @@ function applyData(d, mode){
       if ([0,1,2,3,4,5,6].includes(s.image.columns)) $('imgCols').value = s.image.columns;
     }
     if (d.title !== undefined) $('imgTitle').value = d.title;
-    state.prog = d.queue;
+    state.prog = d.queue; clearHistory();
     state.notes = new Set(d.current || []);
     state.cur = -1;
   }
@@ -1248,7 +1278,7 @@ function toast(msg){
   };
   $('save').onclick = save;
   $('playProg').onclick = playProg;
-  $('clearProg').onclick = () => { if (state.prog.length && confirm(`コード ${state.prog.length} 個をすべて削除しますか？`)){ if (progTimer.length) stopProg(); pushUndo(); state.prog = []; state.cur = -1; render(); toast('すべて削除しました（Ctrl+Z で元に戻す）'); } };
+  $('clearProg').onclick = () => { if (state.prog.length && confirm(`コード ${state.prog.length} 個をすべて削除しますか？`)){ if (progTimer.length) stopProg(); recordOp({ t: 'clr', items: state.prog.slice() }); state.prog = []; state.cur = -1; render(); toast('すべて削除しました（Ctrl+Z で元に戻す）'); } };
   $('exportImg').onclick = exportImage;
   $('dlImg').onclick = downloadImage;
   $('copyImg').onclick = copyImage;
