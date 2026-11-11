@@ -51,6 +51,7 @@ button.sm{padding:4px 9px}
 .bar-main{display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap}
 .bgrp{display:flex;align-items:center;gap:8px;flex:none;white-space:nowrap}
 #transpose{width:8.6em}
+.octval{min-width:2.4em;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
 .bar-title{font-weight:700}
 .seg.lg button{padding:7px 16px;font-size:15px}
 .bar-sub{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
@@ -158,6 +159,12 @@ select:disabled{opacity:.45}
       <select id="transpose"></select>
       <button class="sm pm" id="tUp" title="トランスポーズ +1（] キー）" aria-label="トランスポーズ +1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6 2v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
+      <div class="bgrp" title="鍵盤の位置はそのままで、鳴る音だけオクターブを上下します">
+      <span class="bar-title">オクターブ</span>
+      <button class="sm pm" id="oDown" title="鳴る音を1オクターブ下げる（↓ キー）" aria-label="オクターブ −1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <span id="octVal" class="octval" aria-live="polite">0</span>
+      <button class="sm pm" id="oUp" title="鳴る音を1オクターブ上げる（↑ キー）" aria-label="オクターブ +1"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8M6 2v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
     </div>
     <div class="bar-sub">
       <div class="grp"><span>臨時記号</span>
@@ -181,8 +188,6 @@ select:disabled{opacity:.45}
     <div class="actions">
       <button class="primary" id="playAll">同時に鳴らす<span class="kbd">Space</span></button>
       <button id="arp">アルペジオで鳴らす<span class="kbd">Shift+Space</span></button>
-      <button id="octUp" title="形ごと1オクターブ上へ">オクターブ ▲<span class="kbd">↑</span></button>
-      <button id="octDown" title="形ごと1オクターブ下へ">オクターブ ▼<span class="kbd">↓</span></button>
       <button class="add" id="save">追加<span class="kbd">Enter</span></button>
       <button id="clear">クリア<span class="kbd">Esc</span></button>
     </div>
@@ -302,7 +307,9 @@ const INTERVALS = ['完全1度','短2度','長2度','短3度','長3度','完全4
 // notes / prog は常に「押さえる鍵盤の位置（弾く形）」で持つ。鳴る音 = 位置 + t
 // sol: 読み方 'fixed' = 固定ド / 'movable' = 移動ド（キーの主音がド）。'letter'（英語音名）はデータ書き出し用の内部表記
 // 共有は今の読み方で渡す。固定ド＝実際に鳴る音の位置（トランスポーズ 0 に直す）/ 移動ド＝同じトランスポーズで押さえる位置
-const state = { notes: new Set(), t: 0, acc: 'auto', sol: 'fixed', all: false, playOnAdd: false, prog: [], cur: -1,
+// oct: 鳴らす音だけのオクターブ調整（鍵盤の位置・表示は変えない）。実際に鳴る高さ = 位置 + t + 12*oct
+const OCT_MAX = 3;
+const state = { notes: new Set(), t: 0, oct: 0, acc: 'auto', sol: 'fixed', all: false, playOnAdd: false, prog: [], cur: -1,
   key: 0, minor: false, deg: true };   // deg: ディグリーは常に表示
 // 古い保存データ（true/false）も読めるように
 // 読み方は 固定ド / 移動ド の2つ（'letter' はデータ書き出し用の内部表記のみ）。古い値や CDE は固定ドとして読む
@@ -456,7 +463,7 @@ function playMidi(midi, delay = 0, vel = 0.8){
   o1.connect(filt); o2.connect(g2); g2.connect(filt); filt.connect(g); g.connect(master);
   [o1, o2].forEach(o => { o.start(t0); o.stop(t0 + dur + 0.05); });
 }
-const sound = pos => pos + state.t;                  // 鍵盤位置 → 実音
+const sound = pos => pos + state.t + 12 * state.oct;   // 鍵盤位置 → 実際に鳴らす高さ
 const sorted = () => [...state.notes].sort((a,b) => a-b);
 
 function flash(pos, delay = 0){
@@ -672,11 +679,13 @@ function selectSlot(i){
 }
 
 // ---------- 操作 ----------
-function shift(n){
-  const ns = sorted(); if (!ns.length) return;
-  if (ns[0] + n < LOW || ns[ns.length-1] + n > HIGH){ toast('鍵盤の範囲外です'); return; }
-  state.notes = new Set(ns.map(m => m + n)); commitEdit();
-  render(); playAll();
+// 鳴る音だけオクターブを変える（鍵盤の位置はそのまま）
+function setOct(o){
+  const v = Math.max(-OCT_MAX, Math.min(OCT_MAX, o));
+  if (v === state.oct){ toast(`オクターブは ±${OCT_MAX} までです`); return; }
+  state.oct = v;
+  render();
+  if (state.notes.size) playAll();
 }
 function setT(t){
   state.t = Math.max(-12, Math.min(12, t));
@@ -1040,6 +1049,7 @@ function playProg(){
 function encode(explicitSol = false){
   const p = new URLSearchParams();
   if (state.t) p.set('t', state.t);
+  if (state.oct) p.set('o', state.oct);
   if (state.notes.size) p.set('n', sorted().join('.'));
   if (state.prog.length) p.set('p', state.prog.map(a => a.join('.')).join('-'));
   if (state.acc !== 'auto') p.set('a', state.acc);
@@ -1052,6 +1062,7 @@ function decode(str){
   const nums = s => (s || '').split('.').map(Number).filter(m => m >= LOW && m <= HIGH);
   if (![...p.keys()].length) return false;
   state.t = Math.max(-12, Math.min(12, +p.get('t') || 0));
+  state.oct = Math.max(-OCT_MAX, Math.min(OCT_MAX, Math.trunc(+p.get('o') || 0)));
   state.notes = new Set(nums(p.get('n')));
   state.prog = p.get('p') ? p.get('p').split('-').map(nums).filter(a => a.length) : [];
   state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';
@@ -1139,6 +1150,8 @@ function toast(msg){
   sel.addEventListener('change', () => { setT(+sel.value); if (state.notes.size) playAll(); });
   $('tDown').onclick = () => { setT(state.t - 1); if (state.notes.size) playAll(); };
   $('tUp').onclick   = () => { setT(state.t + 1); if (state.notes.size) playAll(); };
+  $('oDown').onclick = () => setOct(state.oct - 1);
+  $('oUp').onclick   = () => setOct(state.oct + 1);
 
   const keySel = $('keySel');
   [false, true].forEach(minor => {
@@ -1159,6 +1172,8 @@ function toast(msg){
     segOn('accSeg', state.acc);
     segOn('solSeg', state.sol);
     sel.value = state.t;
+    $('octVal').textContent = (state.oct > 0 ? '+' : '') + state.oct;
+    $('oDown').disabled = state.oct <= -OCT_MAX; $('oUp').disabled = state.oct >= OCT_MAX;
     keySel.value = mod(state.key + dispOff()) + (state.minor ? 'm' : '');
     $('keyHint').textContent = state.sol === 'movable' ? `ド = ${fmtLetter(AUTO_MAJ[doPc()])}` : '';
   };
@@ -1179,8 +1194,6 @@ function toast(msg){
     state.notes.clear(); render();
   };
   $('save').onclick = save;
-  $('octDown').onclick = () => shift(-12);
-  $('octUp').onclick = () => shift(12);
   $('playProg').onclick = playProg;
   $('clearProg').onclick = () => { if (state.prog.length && confirm('コードをすべて削除しますか？')){ state.prog = []; state.cur = -1; render(); } };
   $('exportImg').onclick = exportImage;
@@ -1230,8 +1243,8 @@ function toast(msg){
     else if (k === 'Escape'){ $('clear').click(); }
     else if (k === 'Enter'){ e.preventDefault(); save(); }
     else if ((k === 'ArrowLeft' || k === 'ArrowRight') && editing()){ e.preventDefault(); moveSlot(k === 'ArrowLeft' ? -1 : 1); }
-    else if (k === 'ArrowUp'){ e.preventDefault(); shift(12); }
-    else if (k === 'ArrowDown'){ e.preventDefault(); shift(-12); }
+    else if (k === 'ArrowUp'){ e.preventDefault(); setOct(state.oct + 1); }
+    else if (k === 'ArrowDown'){ e.preventDefault(); setOct(state.oct - 1); }
     else if (k === '['){ $('tDown').click(); }
     else if (k === ']'){ $('tUp').click(); }
   });
