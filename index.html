@@ -1127,15 +1127,13 @@ function playProg(){
 }
 
 // ---------- 共有 ----------
-// explicitSol: 共有リンク用。固定ドのときも読み方を明示して相手に伝える
-function encode(explicitSol = false){
+// URL に入れるのはトランスポーズ・キュー・キーだけ。押さえている音・臨時記号・読み方は入れない
+// （臨時記号は「自動」、読み方は「固定ド」が既定。各自の設定はブラウザに保存）
+function encode(){
   const p = new URLSearchParams();
   if (state.t) p.set('t', state.t);
-  if (state.notes.size) p.set('n', sorted().join('.'));
   if (state.prog.length) p.set('p', state.prog.map(a => a.join('.')).join('-'));
-  if (state.acc !== 'auto') p.set('a', state.acc);
   if (state.key || state.minor) p.set('k', state.key + (state.minor ? 'm' : ''));
-  if (state.sol === 'movable') p.set('s', 'm'); else if (state.sol === 'fixed' && explicitSol) p.set('s', '1');
   return p.toString();
 }
 function decode(str){
@@ -1145,7 +1143,7 @@ function decode(str){
   state.t = Math.max(-12, Math.min(12, +p.get('t') || 0));
   state.notes = new Set(nums(p.get('n')));
   state.prog = p.get('p') ? p.get('p').split('-').map(nums).filter(a => a.length) : [];
-  state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';
+  if (p.has('a')) state.acc = ['sharp','flat'].includes(p.get('a')) ? p.get('a') : 'auto';   // 古いリンク用（指定がなければ自分の設定のまま）
   const k = /^(\d+)(m?)$/.exec(p.get('k') || '');
   state.key = k ? mod(+k[1]) : 0; state.minor = !!(k && k[2]);
   if (p.has('s')) state.sol = toSolMode(p.get('s'));   // 読み方指定のリンク（指定がなければ自分の設定のまま）
@@ -1155,7 +1153,7 @@ function decode(str){
 function persist(){
   const code = encode();
   try { history.replaceState(null, '', code ? '#' + code : location.pathname); } catch(e) {}
-  try { localStorage.setItem('piano-pos', JSON.stringify({ code, sol: state.sol, oct: state.oct, all: state.all, playOnAdd: state.playOnAdd, title: $('imgTitle').value, cols: $('imgCols').value })); } catch(e) {}
+  try { localStorage.setItem('piano-pos', JSON.stringify({ code, sol: state.sol, acc: state.acc, oct: state.oct, all: state.all, playOnAdd: state.playOnAdd, title: $('imgTitle').value, cols: $('imgCols').value })); } catch(e) {}
 }
 async function copy(text, msg){
   try { await navigator.clipboard.writeText(text); }
@@ -1189,7 +1187,7 @@ function withShare(fn){
     return fn();
   } finally { Object.assign(state, keep); }
 }
-const shareLink = () => withShare(() => location.origin + location.pathname + '#' + encode(true));
+const shareLink = () => withShare(() => location.origin + location.pathname + '#' + encode());
 function shareText(){
   const how = shareHowNow(), title = $('imgTitle').value.trim();
   return withShare(() => {
@@ -1208,7 +1206,7 @@ function shareText(){
       const info = chordInfo(sorted(), state.t);
       lines.push(`和音: ${info.name}（${info.disp.map(info.full).join(' ')}）` + (state.t ? ` 弾く形 ${nameAt(sorted(), 0)}` : ''));
     }
-    lines.push('リンク: ' + location.origin + location.pathname + '#' + encode(true));
+    lines.push('リンク: ' + location.origin + location.pathname + '#' + encode());
     return lines.join('\n');
   });
 }
@@ -1341,6 +1339,7 @@ function toast(msg){
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem('piano-pos') || '{}'); } catch(e) {}
   state.sol = toSolMode(saved.sol); state.all = !!saved.all; state.playOnAdd = !!saved.playOnAdd;
+  state.acc = ['sharp','flat'].includes(saved.acc) ? saved.acc : 'auto';
   if (!(location.hash.length > 1 && decode(location.hash)) && saved.code) decode(saved.code);
   $('imgTitle').value = saved.title || ''; $('imgCols').value = saved.cols || '0';
   $('allLabels').checked = state.all; $('playOnAdd').checked = state.playOnAdd;
