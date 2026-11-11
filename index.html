@@ -38,7 +38,7 @@ button.sm{padding:4px 9px}
 .seg button{border:0;border-radius:0;background:transparent;padding:5px 10px}
 .seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
 
-.display{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px 24px;background:var(--panel);
+.display{display:flex;flex-direction:column;gap:12px;background:var(--panel);
   border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:12px;min-height:0}
 .chord{font-size:52px;font-weight:700;line-height:1.1;letter-spacing:.01em;white-space:nowrap;overflow:hidden}
 .chord.empty{color:var(--muted);font-size:22px;font-weight:500;display:flex;align-items:center}
@@ -75,8 +75,12 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
 .chip.root{background:var(--root-soft);color:var(--root)}
 .alts{font-size:13px;color:var(--muted)}
 .alts b{color:var(--text);font-weight:600;margin-right:8px}
-.actions{display:grid;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:minmax(118px,1fr);gap:8px}
-.actions button{padding:7px 10px}
+/* 操作ボタンは和音の情報のすぐ下に左揃えで1列。鳴らす系 | 編集系 を区切り線で分ける */
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.actions button{display:inline-flex;align-items:baseline;justify-content:center;gap:8px;padding:7px 14px}
+.actions .kbd{display:inline;margin:0}
+.actions .sep{width:1px;align-self:stretch;background:var(--line);margin:2px 8px}
+#save{min-width:9.5em}
 .actions button.add{border-color:var(--accent);color:var(--accent);font-weight:600}
 .kbd{display:block;font-size:11px;line-height:1.2;color:inherit;opacity:.65;font-weight:500;text-align:center;margin-top:1px}
 .actions button,.bgrp button.sm{text-align:center;line-height:1.25}
@@ -139,8 +143,11 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
   background:var(--text);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:14px;transition:.2s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%)}
 @media (max-width:700px){
-  .actions{grid-auto-columns:minmax(0,1fr)}
-  .actions button{padding:6px 4px;font-size:13px}
+  .actions{display:grid;grid-template-columns:1fr 1fr}
+  .actions .sep{display:none}
+  .actions button{padding:7px 4px;font-size:13px;flex-direction:column;align-items:center;gap:0}
+  .actions .kbd{display:block}
+  #save{min-width:0}
   .bar-main{gap:10px 16px}
   .display{grid-template-columns:1fr}
   .chord{font-size:40px}
@@ -195,6 +202,7 @@ select:disabled,button:disabled{opacity:.45;cursor:default}
     <div class="actions">
       <button class="primary" id="playAll">同時に鳴らす<span class="kbd">Space</span></button>
       <button id="arp">アルペジオで鳴らす<span class="kbd">Shift+Space</span></button>
+      <span class="sep" aria-hidden="true"></span>
       <button class="add" id="save">追加<span class="kbd">Enter</span></button>
       <button id="clear">クリア<span class="kbd">Esc</span></button>
     </div>
