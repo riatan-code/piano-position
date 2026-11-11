@@ -1214,10 +1214,10 @@ function toast(msg){
     if (f){ e.preventDefault(); readFile(f); }
   });
 
-  // 編集中に鍵盤・キュー・再生などの操作ボタン以外を押したら編集を終了
+  // 編集中に鍵盤・キュー・ボタンや入力欄などの操作できる要素以外（何もない場所）を押したら編集を終了
   document.addEventListener('pointerdown', e => {
     if (!editing()) return;
-    if (e.target.closest('#keys, .slot, .actions, .modal')) return;
+    if (e.target.closest('#keys, .slot, .actions, .modal, button, a, input, select, textarea, label, summary, [role="button"], [contenteditable]')) return;
     endEdit(); render();
   });
 
