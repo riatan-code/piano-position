@@ -150,7 +150,7 @@ select:disabled{opacity:.45}
     <div class="bar-main">
       <div class="bgrp">
       <span class="bar-title">読み方</span>
-      <div class="seg lg" id="solSeg"><button data-v="fixed" title="C がいつもド。鍵盤は実際に鳴る音の位置">固定ド</button><button data-v="movable" title="キーの主音がド。鍵盤は押さえる位置（トランスポーズして C で弾く形）">移動ド</button></div>
+      <div class="seg lg" id="solSeg"><button data-v="fixed" title="C がいつもド。鍵盤は実際に鳴る音の位置">固定ド</button><button data-v="movable" title="キーの主音がド。鍵盤は押さえる位置（トランスポーズして C で弾く形）">移動ド</button><button data-v="letter" title="英語音名（C D E…）。鍵盤は実際に鳴る音の位置">CDE</button></div>
       </div>
       <div class="bgrp">
       <span class="bar-title">トランスポーズ</span>
@@ -300,13 +300,13 @@ const INTERVALS = ['完全1度','短2度','長2度','短3度','長3度','完全4
 // cur: 選択中（編集中）のキュー番号。-1 なら未選択
 // key/minor: ディグリーの基準キー（「押さえる形」側の主音 pc。実音のキーは key + t）、deg: ディグリー表記を使うか
 // notes / prog は常に「押さえる鍵盤の位置（弾く形）」で持つ。鳴る音 = 位置 + t
-// sol: 読み方 'fixed' = 固定ド / 'movable' = 移動ド（キーの主音がド）。'letter'（英語音名）はデータ書き出し用の内部表記
+// sol: 読み方 'fixed' = 固定ド / 'movable' = 移動ド（キーの主音がド）/ 'letter' = 英語音名（CDE。位置は固定ドと同じ扱い）
 // 共有は今の読み方で渡す。固定ド＝実際に鳴る音の位置（トランスポーズ 0 に直す）/ 移動ド＝同じトランスポーズで押さえる位置
 const state = { notes: new Set(), t: 0, acc: 'auto', sol: 'fixed', all: false, playOnAdd: false, prog: [], cur: -1,
   key: 0, minor: false, deg: true };   // deg: ディグリーは常に表示
 // 古い保存データ（true/false）も読めるように
-// 読み方は 固定ド / 移動ド の2つ（'letter' はデータ書き出し用の内部表記のみ）。古い値や CDE は固定ドとして読む
-const toSolMode = v => v === 'movable' || v === 'm' ? 'movable' : 'fixed';
+// 読み方は 固定ド / 移動ド / CDE の3つ。古い値（true/false など）は固定ドとして読む
+const toSolMode = v => v === 'movable' || v === 'm' ? 'movable' : v === 'letter' || v === 'l' ? 'letter' : 'fixed';
 
 // ---------- ディグリー ----------
 const ROMAN = ['Ⅰ','Ⅱ','Ⅲ','Ⅳ','Ⅴ','Ⅵ','Ⅶ'];
@@ -793,7 +793,7 @@ function buildImageInner(how){
   const meta = [`${n}ポジション`,
     ...(how === 'same' ? [`トランスポーズ ${tStr()}`] : []),
     ...(state.deg ? [`ディグリーのキー ${keyLabel()}`] : []),
-    ...(state.sol === 'fixed' ? ['音名は固定ド'] : state.sol === 'movable' ? [`音名は移動ド（ド = ${fmtLetter(AUTO_MAJ[doPc()])}）`] : []),
+    ...(state.sol === 'fixed' ? ['音名は固定ド'] : state.sol === 'letter' ? ['音名は英語（CDE）'] : state.sol === 'movable' ? [`音名は移動ド（ド = ${fmtLetter(AUTO_MAJ[doPc()])}）`] : []),
     `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`].join('　·　');
   g.font = `500 13px ${FONT}`; g.fillStyle = IMG.muted; g.fillText(meta, PAD, PAD + 52);
   g.strokeStyle = IMG.line; g.lineWidth = 1;
@@ -1044,7 +1044,7 @@ function encode(explicitSol = false){
   if (state.prog.length) p.set('p', state.prog.map(a => a.join('.')).join('-'));
   if (state.acc !== 'auto') p.set('a', state.acc);
   if (state.key || state.minor) p.set('k', state.key + (state.minor ? 'm' : ''));
-  if (state.sol === 'movable') p.set('s', 'm'); else if (state.sol === 'fixed' && explicitSol) p.set('s', '1');
+  if (state.sol === 'movable') p.set('s', 'm'); else if (state.sol === 'letter') p.set('s', 'l'); else if (state.sol === 'fixed' && explicitSol) p.set('s', '1');
   return p.toString();
 }
 function decode(str){
@@ -1076,7 +1076,7 @@ async function copy(text, msg){
 }
 // ---------- 共有（相手の弾き方に合わせて変換） ----------
 // 共有の形: 固定ドなら実際の音（トランスポーズ 0 に直す）、移動ドなら同じトランスポーズのまま
-const shareHowNow = () => !state.t ? 'none' : state.sol === 'fixed' ? 'abs' : 'same';
+const shareHowNow = () => !state.t ? 'none' : state.sol !== 'movable' ? 'abs' : 'same';
 // 固定ドで共有するとき、押さえる位置を鳴る音の位置へ直す（鍵盤の範囲に収まるようオクターブ調整）
 function toSounding(arr){
   let a = arr.map(p => p + state.t);
